@@ -560,3 +560,17 @@ txt转世界书部分参考了@某不科学的高数 大佬的 https://discord.c
 
 - 旧工程包可继续导入，系统会自动做状态映射与兼容写回。
 - 旧字段目前仍可读写用于兼容外部数据，但后续开发应以 `worldbookStatus` / `directorStatus` 为唯一判定来源。
+
+## 版本号维护
+
+版本号由 `manifest.json` 提供给 SillyTavern，由 `txtToWorldbook/ui/settingsPanel.js` 显示在插件界面。请不要手工分别修改两个文件，使用统一命令同步：
+
+```bash
+node scripts/set-version.mjs A1.1
+```
+
+提交前可检查两处版本是否一致：
+
+```bash
+node scripts/set-version.mjs --check
+```

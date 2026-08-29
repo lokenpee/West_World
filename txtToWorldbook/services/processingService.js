@@ -1,4 +1,7 @@
-﻿import { normalizeChapterSplitType as normalizeSplitType } from '../../src/domain/chapter/splitTypes.js';
+﻿import {
+    normalizeChapterSplitRule,
+    normalizeChapterSplitType as normalizeSplitType,
+} from '../../src/domain/chapter/splitTypes.js';
 
 export function createProcessingService(deps = {}) {
     const {
@@ -494,18 +497,10 @@ export function createProcessingService(deps = {}) {
     }
 
     function normalizeSplitRule(rawRule) {
-        const source = rawRule && typeof rawRule === 'object' ? rawRule : {};
-        const legacyMatched = Array.isArray(source.matched)
-            ? source.matched.map((item) => String(item || '').trim()).filter(Boolean)
-            : [];
-        const primary = normalizeSplitType(source.primary || source.rule || source.main || legacyMatched[0] || 'goal_shift');
-        const rationale = String(source.rationale || source.reason || '').trim()
-            || `该切分属于 ${primary}，用于保持叙事单元完整并避免事件被切开。`;
-
-        return {
-            primary,
-            rationale,
-        };
+        return normalizeChapterSplitRule(rawRule, {
+            useMatched: true,
+            fallbackRationale: (primary) => `该切分属于 ${primary}，用于保持叙事单元完整并避免事件被切开。`,
+        });
     }
 
     function normalizeBeatItem(rawBeat, idx, fallbackSummary = '') {

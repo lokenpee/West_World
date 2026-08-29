@@ -2,7 +2,7 @@ import {
     defaultDirectorFrameworkPrompt,
     defaultDirectorInjectionPrompt,
 } from '../core/constants.js';
-import { normalizeChapterSplitType as normalizeSplitType } from '../../src/domain/chapter/splitTypes.js';
+import { normalizeChapterSplitRule } from '../../src/domain/chapter/splitTypes.js';
 
 export function createDirectorService(deps = {}) {
     const {
@@ -460,14 +460,7 @@ export function createDirectorService(deps = {}) {
     }
 
     function normalizeSplitRule(rawRule = {}) {
-        const source = rawRule && typeof rawRule === 'object' ? rawRule : {};
-        const primary = normalizeSplitType(source.primary || source.rule || source.main || source.type || 'goal_shift');
-        const rationale = String(source.rationale || source.reason || '').trim()
-            || `选择 ${primary} 以保持叙事单元完整并避免事件被切开。`;
-        return {
-            primary,
-            rationale,
-        };
+        return normalizeChapterSplitRule(rawRule);
     }
 
     function normalizeBeat(rawBeat, idx) {
