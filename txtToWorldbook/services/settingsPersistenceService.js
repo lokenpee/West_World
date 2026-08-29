@@ -1,0 +1,279 @@
+export function createSettingsPersistenceService(deps) {
+    const {
+        AppState,
+        defaultSettings,
+        updateSettingsUI,
+        updateChapterRegexUI,
+        handleProviderChange,
+    } = deps;
+
+    const LEGACY_CHAPTER_PATTERNS = new Set([
+        '第[零一二三四五六七八九十百千万0-9]+[章回卷节部篇]',
+        '第\\s*[零一二三四五六七八九十百千万0-9]+\\s*[章回卷节部篇]',
+    ]);
+    const RECOMMENDED_CHAPTER_PATTERN = '^[\\s\\u3000\\uFEFF]*第\\s*[零一二三四五六七八九十百千万0-9]+\\s*[章回卷节部篇][^\\n\\r]{0,80}';
+    const SETTINGS_STORAGE_KEY = 'westworldTxtToWorldbookSettings';
+    const LEGACY_SETTINGS_STORAGE_KEY = 'storyweaverTxtToWorldbookSettings';
+
+    function migrateLegacyChapterPattern(pattern) {
+        if (!pattern || typeof pattern !== 'string') return pattern;
+        if (LEGACY_CHAPTER_PATTERNS.has(pattern.trim())) {
+            return RECOMMENDED_CHAPTER_PATTERN;
+        }
+        return pattern;
+    }
+
+    function readApiConfigFromDom(target) {
+        const suffix = target === 'director' ? 'director' : 'main';
+        const provider = document.getElementById(`ttw-api-provider-${suffix}`)?.value
+            || document.getElementById('ttw-api-provider')?.value
+            || 'openai-compatible';
+        const apiKey = document.getElementById(`ttw-api-key-${suffix}`)?.value
+            || (suffix === 'main' ? document.getElementById('ttw-api-key')?.value : '')
+            || '';
+        const endpoint = document.getElementById(`ttw-api-endpoint-${suffix}`)?.value
+            || (suffix === 'main' ? document.getElementById('ttw-api-endpoint')?.value : '')
+            || '';
+        const model = document.getElementById(`ttw-api-model-${suffix}`)?.value
+            || (suffix === 'main' ? document.getElementById('ttw-api-model')?.value : '')
+            || 'gemini-2.5-flash';
+        const maxTokensRaw = parseInt(
+            document.getElementById(`ttw-api-max-tokens-${suffix}`)?.value
+                || (suffix === 'main' ? document.getElementById('ttw-api-max-tokens')?.value : ''),
+            10
+        );
+        const maxTokens = Number.isFinite(maxTokensRaw) ? Math.max(1, Math.min(200000, maxTokensRaw)) : 65536;
+
+        return { provider, apiKey, endpoint, model, maxTokens };
+    }
+
+    function normalizeApiConfig(raw, fallback = {}) {
+        const base = {
+            provider: 'openai-compatible',
+            apiKey: '',
+            endpoint: '',
+            model: 'gemini-2.5-flash',
+            maxTokens: 65536,
+            ...fallback,
+            ...(raw || {}),
+        };
+        const parsedMax = parseInt(base.maxTokens, 10);
+        base.maxTokens = Number.isFinite(parsedMax) ? Math.max(1, Math.min(200000, parsedMax)) : 65536;
+        return base;
+    }
+
+    function saveCurrentSettings(options = {}) {
+        const {
+            syncPromptFieldsFromDom = false,
+        } = options;
+
+        AppState.settings.chunkSize = parseInt(document.getElementById('ttw-chunk-size')?.value) || 8000;
+        AppState.settings.pluginEnabled = document.getElementById('ttw-plugin-enabled')?.checked
+            ?? AppState.settings.pluginEnabled !== false;
+        AppState.settings.apiTimeout = (parseInt(document.getElementById('ttw-api-timeout')?.value) || 120) * 1000;
+        const incrementalModeEl = document.getElementById('ttw-incremental-mode');
+        AppState.processing.incrementalMode = incrementalModeEl
+            ? incrementalModeEl.checked
+            : AppState.processing.incrementalMode !== false;
+
+        const volumeModeEl = document.getElementById('ttw-volume-mode');
+        AppState.processing.volumeMode = volumeModeEl
+            ? volumeModeEl.checked
+            : AppState.processing.volumeMode === true;
+        AppState.settings.useVolumeMode = AppState.processing.volumeMode;
+        AppState.settings.enablePlotOutline = document.getElementById('ttw-enable-plot')?.checked ?? false;
+        AppState.settings.enableLiteraryStyle = document.getElementById('ttw-enable-style')?.checked ?? false;
+        if (syncPromptFieldsFromDom) {
+            AppState.settings.customWorldbookPrompt = document.getElementById('ttw-worldbook-prompt')?.value || '';
+            AppState.settings.customPlotPrompt = document.getElementById('ttw-plot-prompt')?.value || '';
+            AppState.settings.customStylePrompt = document.getElementById('ttw-style-prompt')?.value || '';
+            AppState.settings.customConsolidatePrompt = document.getElementById('ttw-consolidate-prompt')?.value || '';
+            AppState.settings.customDirectorFrameworkPrompt = document.getElementById('ttw-director-framework-prompt')?.value || '';
+            AppState.settings.customDirectorInjectionPrompt = document.getElementById('ttw-director-injection-prompt')?.value || '';
+        }
+        AppState.settings.useTavernApi = document.getElementById('ttw-use-tavern-api')?.checked ?? true;
+
+        const parallelEnabledEl = document.getElementById('ttw-parallel-enabled');
+        if (parallelEnabledEl) {
+            AppState.config.parallel.enabled = parallelEnabledEl.checked;
+        }
+
+        const parallelConcurrencyEl = document.getElementById('ttw-parallel-concurrency');
+        if (parallelConcurrencyEl) {
+            AppState.config.parallel.concurrency = Math.max(1, Math.min(10, parseInt(parallelConcurrencyEl.value, 10) || 1));
+            parallelConcurrencyEl.value = AppState.config.parallel.concurrency;
+        }
+
+        const sharedConcurrency = AppState.config.parallel.concurrency || 1;
+        const parallelMainConcurrencyEl = document.getElementById('ttw-parallel-main-concurrency');
+        const parallelDirectorConcurrencyEl = document.getElementById('ttw-parallel-director-concurrency');
+        AppState.config.parallel.mainConcurrency = parallelMainConcurrencyEl
+            ? Math.max(1, Math.min(10, parseInt(parallelMainConcurrencyEl.value, 10) || sharedConcurrency))
+            : sharedConcurrency;
+        AppState.config.parallel.directorConcurrency = parallelDirectorConcurrencyEl
+            ? Math.max(1, Math.min(10, parseInt(parallelDirectorConcurrencyEl.value, 10) || sharedConcurrency))
+            : sharedConcurrency;
+        AppState.config.parallel.mode = document.getElementById('ttw-parallel-mode')?.value || 'independent';
+
+        AppState.settings.parallelEnabled = AppState.config.parallel.enabled;
+        AppState.settings.parallelConcurrency = AppState.config.parallel.concurrency;
+        AppState.settings.parallelMainConcurrency = AppState.config.parallel.mainConcurrency || AppState.config.parallel.concurrency || 1;
+        AppState.settings.parallelDirectorConcurrency = AppState.config.parallel.directorConcurrency || AppState.config.parallel.concurrency || 1;
+        AppState.settings.parallelMode = AppState.config.parallel.mode;
+        AppState.settings.chapterCompletionMode = document.getElementById('ttw-chapter-completion-mode')?.value || AppState.settings.chapterCompletionMode || 'consistency';
+        AppState.settings.categoryLightSettings = { ...AppState.config.categoryLight };
+        const forceChapterMarkerEl = document.getElementById('ttw-force-chapter-marker');
+        AppState.settings.forceChapterMarker = forceChapterMarkerEl
+            ? forceChapterMarkerEl.checked
+            : AppState.settings.forceChapterMarker !== false;
+        AppState.settings.chapterRegexPattern = document.getElementById('ttw-chapter-regex')?.value || AppState.config.chapterRegex.pattern;
+        AppState.settings.defaultWorldbookEntriesUI = AppState.persistent.defaultEntries;
+        AppState.settings.categoryDefaultConfig = AppState.config.categoryDefault;
+        AppState.settings.entryPositionConfig = AppState.config.entryPosition;
+        AppState.settings.customSuffixPrompt = document.getElementById('ttw-suffix-prompt')?.value || '';
+        const mainApi = readApiConfigFromDom('main');
+        const directorApi = readApiConfigFromDom('director');
+
+        const mainModelSelectContainer = document.getElementById('ttw-model-select-container-main');
+        const mainModelSelect = document.getElementById('ttw-model-select-main');
+        const mainModelInput = document.getElementById('ttw-api-model-main') || document.getElementById('ttw-api-model');
+        if (mainModelSelectContainer && mainModelSelectContainer.style.display !== 'none' && mainModelSelect?.value) {
+            mainApi.model = mainModelSelect.value;
+            if (mainModelInput) mainModelInput.value = mainModelSelect.value;
+        }
+
+        const directorModelSelectContainer = document.getElementById('ttw-model-select-container-director');
+        const directorModelSelect = document.getElementById('ttw-model-select-director');
+        const directorModelInput = document.getElementById('ttw-api-model-director');
+        if (directorModelSelectContainer && directorModelSelectContainer.style.display !== 'none' && directorModelSelect?.value) {
+            directorApi.model = directorModelSelect.value;
+            if (directorModelInput) directorModelInput.value = directorModelSelect.value;
+        }
+
+        AppState.settings.mainApi = normalizeApiConfig(mainApi, AppState.settings.mainApi);
+        AppState.settings.directorApi = normalizeApiConfig(directorApi, AppState.settings.directorApi);
+        AppState.settings.directorEnabled = document.getElementById('ttw-director-enabled')?.checked ?? AppState.settings.directorEnabled ?? true;
+        AppState.settings.directorAutoFallbackToMain = document.getElementById('ttw-director-fallback-main')?.checked ?? AppState.settings.directorAutoFallbackToMain ?? true;
+        AppState.settings.directorRunEveryTurn = document.getElementById('ttw-director-run-every-turn')?.checked ?? AppState.settings.directorRunEveryTurn ?? true;
+
+        // Backward compatibility mirror fields
+        AppState.settings.customApiProvider = AppState.settings.mainApi.provider;
+        AppState.settings.customApiKey = AppState.settings.mainApi.apiKey;
+        AppState.settings.customApiEndpoint = AppState.settings.mainApi.endpoint;
+        AppState.settings.customApiModel = AppState.settings.mainApi.model;
+        AppState.settings.customApiMaxTokens = AppState.settings.mainApi.maxTokens;
+
+        const allowRecursionEl = document.getElementById('ttw-allow-recursion');
+        AppState.settings.allowRecursion = allowRecursionEl
+            ? allowRecursionEl.checked
+            : AppState.settings.allowRecursion === true;
+        AppState.settings.filterResponseTags = document.getElementById('ttw-filter-tags')?.value
+            || AppState.settings.filterResponseTags
+            || 'thinking,/think';
+        AppState.settings.debugMode = document.getElementById('ttw-debug-mode')?.checked
+            ?? AppState.settings.debugMode
+            ?? false;
+        AppState.settings.plotOutlineExportConfig = AppState.config.plotOutline;
+
+        try {
+            const serialized = JSON.stringify(AppState.settings);
+            localStorage.setItem(SETTINGS_STORAGE_KEY, serialized);
+            // Keep legacy key in sync for backward compatibility.
+            localStorage.setItem(LEGACY_SETTINGS_STORAGE_KEY, serialized);
+        } catch (e) { }
+    }
+
+    function loadSavedSettings() {
+        try {
+            const saved = localStorage.getItem(SETTINGS_STORAGE_KEY)
+                || localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                AppState.settings = { ...defaultSettings, ...parsed };
+                AppState.settings.pluginEnabled = parsed.pluginEnabled ?? true;
+
+                const migratedMainApi = normalizeApiConfig(
+                    parsed.mainApi,
+                    {
+                        provider: parsed.customApiProvider || defaultSettings.mainApi?.provider || 'openai-compatible',
+                        apiKey: parsed.customApiKey || defaultSettings.mainApi?.apiKey || '',
+                        endpoint: parsed.customApiEndpoint || defaultSettings.mainApi?.endpoint || '',
+                        model: parsed.customApiModel || defaultSettings.mainApi?.model || 'gemini-2.5-flash',
+                        maxTokens: parsed.customApiMaxTokens || defaultSettings.mainApi?.maxTokens || 65536,
+                    }
+                );
+                const migratedDirectorApi = normalizeApiConfig(
+                    parsed.directorApi,
+                    {
+                        provider: migratedMainApi.provider,
+                        apiKey: '',
+                        endpoint: migratedMainApi.endpoint,
+                        model: migratedMainApi.model,
+                        maxTokens: migratedMainApi.maxTokens,
+                    }
+                );
+                AppState.settings.mainApi = migratedMainApi;
+                AppState.settings.directorApi = migratedDirectorApi;
+                AppState.settings.directorEnabled = parsed.directorEnabled ?? true;
+                AppState.settings.directorAutoFallbackToMain = parsed.directorAutoFallbackToMain ?? true;
+                AppState.settings.directorRunEveryTurn = parsed.directorRunEveryTurn ?? true;
+
+                // Backward compatibility mirror fields
+                AppState.settings.customApiProvider = migratedMainApi.provider;
+                AppState.settings.customApiKey = migratedMainApi.apiKey;
+                AppState.settings.customApiEndpoint = migratedMainApi.endpoint;
+                AppState.settings.customApiModel = migratedMainApi.model;
+                AppState.settings.customApiMaxTokens = migratedMainApi.maxTokens;
+
+                // 迁移旧默认配置到更稳妥的新默认（仅迁移历史默认值，不覆盖用户自定义值）
+                if (parsed.chunkSize === 15000) {
+                    AppState.settings.chunkSize = 8000;
+                }
+                if (parsed.parallelConcurrency === 3) {
+                    AppState.settings.parallelConcurrency = 1;
+                }
+
+                AppState.processing.volumeMode = AppState.settings.useVolumeMode || false;
+                AppState.config.parallel.enabled = AppState.settings.parallelEnabled !== undefined ? AppState.settings.parallelEnabled : true;
+                AppState.config.parallel.concurrency = AppState.settings.parallelConcurrency || 1;
+                AppState.config.parallel.mainConcurrency = AppState.settings.parallelMainConcurrency || AppState.config.parallel.concurrency || 1;
+                AppState.config.parallel.directorConcurrency = AppState.settings.parallelDirectorConcurrency || AppState.config.parallel.concurrency || 1;
+                AppState.config.parallel.mode = AppState.settings.parallelMode || 'independent';
+                if (!['consistency', 'throughput'].includes(AppState.settings.chapterCompletionMode)) {
+                    AppState.settings.chapterCompletionMode = 'consistency';
+                }
+                const maxTokens = parseInt(AppState.settings.customApiMaxTokens, 10);
+                AppState.settings.customApiMaxTokens = Number.isFinite(maxTokens)
+                    ? Math.max(1, Math.min(200000, maxTokens))
+                    : 65536;
+
+                if (AppState.settings.chapterRegexPattern) {
+                    AppState.settings.chapterRegexPattern = migrateLegacyChapterPattern(AppState.settings.chapterRegexPattern);
+                    AppState.config.chapterRegex.pattern = AppState.settings.chapterRegexPattern;
+                }
+                if (AppState.settings.defaultWorldbookEntriesUI) {
+                    AppState.persistent.defaultEntries = AppState.settings.defaultWorldbookEntriesUI;
+                }
+                if (AppState.settings.categoryDefaultConfig) {
+                    AppState.config.categoryDefault = AppState.settings.categoryDefaultConfig;
+                }
+                if (AppState.settings.entryPositionConfig) {
+                    AppState.config.entryPosition = AppState.settings.entryPositionConfig;
+                }
+                if (AppState.settings.plotOutlineExportConfig) {
+                    AppState.config.plotOutline = AppState.settings.plotOutlineExportConfig;
+                }
+            }
+        } catch (e) { }
+
+        updateSettingsUI();
+        updateChapterRegexUI();
+        handleProviderChange('main');
+        handleProviderChange('director');
+    }
+
+    return {
+        saveCurrentSettings,
+        loadSavedSettings,
+    };
+}

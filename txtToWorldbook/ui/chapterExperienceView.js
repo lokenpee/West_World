@@ -1,0 +1,1714 @@
+import { normalizeChapterSplitType as normalizeSplitType } from '../../src/domain/chapter/splitTypes.js';
+
+export function createChapterExperienceView(deps = {}) {
+    const {
+        AppState,
+        ErrorHandler,
+        callAPI,
+        getLanguagePrefix,
+        ModalFactory,
+        MemoryHistoryDB,
+        retryChapterOutline,
+        showResultSection,
+    } = deps;
+
+    const selectors = {
+        outlineSection: 'ttw-story-outline-section',
+        currentSection: 'ttw-current-chapter-section',
+        outlineList: 'ttw-story-outline-list',
+        currentTitle: 'ttw-current-chapter-title',
+        currentSummary: 'ttw-current-story-summary',
+        currentScript: 'ttw-current-script',
+        currentOpening: 'ttw-current-opening',
+        chapterHint: 'ttw-current-chapter-hint',
+        editButton: 'ttw-edit-current-chapter-btn',
+        prevBeatButton: 'ttw-prev-beat-btn',
+        nextBeatButton: 'ttw-next-beat-btn',
+        nextButton: 'ttw-next-chapter-btn',
+        startFirstButton: 'ttw-start-reading-first',
+        viewTabs: 'ttw-view-nav',
+        txtModeButton: 'ttw-view-mode-txt',
+        progressModeButton: 'ttw-view-mode-progress',
+        outlineModeButton: 'ttw-view-mode-outline',
+        currentModeButton: 'ttw-view-mode-current',
+        progressSection: 'ttw-progress-section',
+        promptEditorSection: 'ttw-prompt-editor-section',
+        settingsSection: 'ttw-settings-section',
+        directorDebugSection: 'ttw-director-debug-section',
+        directorDebugList: 'ttw-director-debug-list',
+        directorDebugDetail: 'ttw-director-debug-detail',
+        directorDebugRefreshButton: 'ttw-director-debug-refresh',
+        directorDebugCopyButton: 'ttw-director-debug-copy',
+        directorDebugClearButton: 'ttw-director-debug-clear',
+        promptEditorModeButton: 'ttw-view-mode-prompt-editor',
+        settingsModeButton: 'ttw-view-mode-settings',
+        directorDebugModeButton: 'ttw-view-mode-director-debug',
+        txtModeClass: 'ttw-mode-txt',
+    };
+
+    let activeEditorModal = null;
+    let directorDebugWindowEventBound = false;
+    const LAST_MODAL_VIEW_STORAGE_KEY = 'westworldTxtToWorldbookLastModalView';
+    const SUPPORTED_VIEW_MODES = new Set(['txt', 'outline', 'current', 'progress', 'settings', 'prompt-editor', 'director-debug']);
+
+    function normalizeViewMode(mode) {
+        const normalized = String(mode || '').trim().toLowerCase();
+        return SUPPORTED_VIEW_MODES.has(normalized) ? normalized : '';
+    }
+
+    function persistLastModalView(mode) {
+        const normalized = normalizeViewMode(mode);
+        if (!normalized) return;
+
+        if (!AppState.ui || typeof AppState.ui !== 'object') {
+            AppState.ui = {};
+        }
+        AppState.ui.lastModalView = normalized;
+
+        if (!AppState.settings || typeof AppState.settings !== 'object') {
+            AppState.settings = {};
+        }
+        AppState.settings.lastModalView = normalized;
+
+        try {
+            localStorage.setItem(LAST_MODAL_VIEW_STORAGE_KEY, normalized);
+        } catch (_) {
+            // ignore localStorage write errors
+        }
+    }
+
+    function hideWithRestore(el) {
+        if (!el) return;
+        if (el.dataset.swHiddenByMode === '1') return;
+        el.dataset.swHiddenByMode = '1';
+        el.dataset.swPrevDisplayMode = el.style.display || '';
+        el.style.display = 'none';
+    }
+
+    function restoreFromHide(el) {
+        if (!el) return;
+        if (el.dataset.swHiddenByMode !== '1') return;
+        el.style.display = el.dataset.swPrevDisplayMode || '';
+        delete el.dataset.swHiddenByMode;
+        delete el.dataset.swPrevDisplayMode;
+    }
+
+    function forceShowWithRestore(el) {
+        if (!el) return;
+        if (el.dataset.swShownByMode === '1') return;
+        el.dataset.swShownByMode = '1';
+        el.dataset.swPrevDisplayForced = el.style.display || '';
+        el.style.display = 'block';
+    }
+
+    function restoreFromForcedShow(el) {
+        if (!el) return;
+        if (el.dataset.swShownByMode !== '1') return;
+        el.style.display = el.dataset.swPrevDisplayForced || '';
+        delete el.dataset.swShownByMode;
+        delete el.dataset.swPrevDisplayForced;
+    }
+
+    function forceHideResultWithRestore(el) {
+        if (!el) return;
+        if (el.dataset.swResultHiddenByMode === '1') return;
+        el.dataset.swResultHiddenByMode = '1';
+        el.dataset.swPrevResultDisplay = el.style.display || '';
+        el.style.display = 'none';
+    }
+
+    function restoreResultFromForcedHide(el) {
+        if (!el) return;
+        if (el.dataset.swResultHiddenByMode !== '1') return;
+        el.style.display = el.dataset.swPrevResultDisplay || '';
+        delete el.dataset.swResultHiddenByMode;
+        delete el.dataset.swPrevResultDisplay;
+    }
+
+    function setResultCoreVisible(show) {
+        const resultSection = document.getElementById('ttw-result-section');
+        if (!resultSection) return;
+
+        const coreNodes = [
+            resultSection.querySelector('.ttw-section-header'),
+            document.getElementById('ttw-result-preview'),
+            resultSection.querySelector('.ttw-result-actions'),
+        ];
+
+        coreNodes.forEach((node) => {
+            if (!node) return;
+            if (show) {
+                restoreFromHide(node);
+            } else {
+                hideWithRestore(node);
+            }
+        });
+    }
+
+    function setModeTabActive(mode) {
+        const tabMap = {
+            txt: selectors.txtModeButton,
+            progress: selectors.progressModeButton,
+            outline: selectors.outlineModeButton,
+            current: selectors.currentModeButton,
+            'director-debug': selectors.directorDebugModeButton,
+            'prompt-editor': selectors.promptEditorModeButton,
+            settings: selectors.settingsModeButton,
+        };
+        Object.entries(tabMap).forEach(([key, id]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (key === mode) {
+                el.classList.add('active');
+            } else {
+                el.classList.remove('active');
+            }
+        });
+    }
+
+    function setTxtSectionsVisible(show) {
+        const sections = document.querySelectorAll(`.${selectors.txtModeClass}`);
+        sections.forEach((el) => {
+            if (show) {
+                restoreFromHide(el);
+            } else {
+                hideWithRestore(el);
+            }
+        });
+
+        if (show) {
+            const queueSection = document.getElementById('ttw-queue-section');
+            if (queueSection?.dataset.ttwDesiredDisplay) {
+                queueSection.style.display = queueSection.dataset.ttwDesiredDisplay;
+            }
+        }
+    }
+
+    function setResultSectionVisibleForMode(mode) {
+        const resultSection = document.getElementById('ttw-result-section');
+        if (!resultSection) return;
+
+        if (mode === 'txt') {
+            restoreResultFromForcedHide(resultSection);
+            restoreFromForcedShow(resultSection);
+            if (typeof showResultSection === 'function') {
+                showResultSection(true);
+            }
+            setResultCoreVisible(true);
+            return;
+        }
+
+        if (mode === 'outline' || mode === 'current' || mode === 'director-debug') {
+            restoreResultFromForcedHide(resultSection);
+            if (typeof showResultSection === 'function') {
+                showResultSection(true);
+            }
+            forceShowWithRestore(resultSection);
+            setResultCoreVisible(false);
+            return;
+        }
+
+        restoreFromForcedShow(resultSection);
+        if (typeof showResultSection === 'function') {
+            showResultSection(false);
+        }
+        setResultCoreVisible(false);
+        forceHideResultWithRestore(resultSection);
+    }
+
+    function ensureState() {
+        if (!AppState.experience) {
+            AppState.experience = { currentChapterIndex: 0 };
+        }
+    }
+
+    function getMemory(index) {
+        return AppState.memory.queue[index] || null;
+    }
+
+    function ensureMemoryRuntime(memory, index) {
+        if (!memory) return;
+        if (!memory.chapterTitle || !String(memory.chapterTitle).trim()) {
+            memory.chapterTitle = `第${index + 1}章`;
+        }
+        if (typeof memory.chapterOutline !== 'string') {
+            memory.chapterOutline = '';
+        }
+        if (!memory.chapterOutlineStatus) {
+            memory.chapterOutlineStatus = 'pending';
+        }
+        if (typeof memory.chapterOutlineError !== 'string') {
+            memory.chapterOutlineError = '';
+        }
+        if (!memory.chapterScript || typeof memory.chapterScript !== 'object') {
+            memory.chapterScript = { keyNodes: [], beats: [] };
+        }
+        if (!Array.isArray(memory.chapterScript.keyNodes)) {
+            memory.chapterScript.keyNodes = [];
+        }
+        if (!Array.isArray(memory.chapterScript.beats)) {
+            memory.chapterScript.beats = [];
+        }
+        memory.chapterScript.beats = memory.chapterScript.beats.map((beat, idx) => normalizeBeatForView(beat, idx));
+        if (!Number.isInteger(memory.chapterCurrentBeatIndex)) {
+            memory.chapterCurrentBeatIndex = 0;
+        }
+        if (typeof memory.chapterOpeningPreview !== 'string') {
+            memory.chapterOpeningPreview = '';
+        }
+        if (typeof memory.chapterOpeningSent !== 'boolean') {
+            memory.chapterOpeningSent = false;
+        }
+        if (typeof memory.chapterOpeningError !== 'string') {
+            memory.chapterOpeningError = '';
+        }
+        if (typeof memory.chapterOpeningGenerating !== 'boolean') {
+            memory.chapterOpeningGenerating = false;
+        }
+    }
+
+    function toShortText(text, maxLen = 180) {
+        const plain = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!plain) return '';
+        return plain.length > maxLen ? `${plain.slice(0, maxLen)}...` : plain;
+    }
+
+    function normalizeSplitRule(rawRule = {}) {
+        const source = rawRule && typeof rawRule === 'object' ? rawRule : {};
+        const primary = normalizeSplitType(source.primary || source.rule || source.main || source.type || 'goal_shift');
+        const rationale = String(source.rationale || source.reason || '').trim()
+            || `选择 ${primary} 以保持叙事单元完整并避免事件被切开。`;
+        return {
+            primary,
+            rationale,
+        };
+    }
+
+    function normalizeSelfCheck(rawSelfCheck = '', extraWarnings = []) {
+        const source = rawSelfCheck && typeof rawSelfCheck === 'object' ? rawSelfCheck : null;
+        const direct = typeof rawSelfCheck === 'string' ? rawSelfCheck : '';
+        const base = String(
+            source?.self_check
+            || source?.selfCheck
+            || source?.note
+            || source?.summary
+            || direct
+            || ''
+        ).trim();
+        const warningText = Array.isArray(extraWarnings)
+            ? extraWarnings.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 3).join('；')
+            : '';
+        if (base && warningText) return `${base}（${warningText}）`;
+        if (base) return base;
+        if (warningText) return `已自动修正：${warningText}`;
+        return '未提供自检说明。';
+    }
+
+    function normalizeBeatForView(rawBeat = {}, idx = 0) {
+        const source = rawBeat && typeof rawBeat === 'object' ? rawBeat : {};
+        const eventSummary = toShortText(
+            source.event_summary || source.eventSummary || source.summary || source.event || source.description || `事件点${idx + 1}`,
+            200
+        );
+        // 兼容旧版数据：读取已废弃的entry_event字段
+        const entryEvent = toShortText(
+            source.entryEvent || source.entry_event || '',
+            120
+        );
+        const exitCondition = toShortText(
+            source.exitCondition
+            || source.exit_condition
+            || source.exist_condition
+            || source.existCondition
+            || source['exist condition']
+            || '等待关键互动完成',
+            90
+        );
+        const splitReason = toShortText(source.split_reason || source.splitReason || source.reason || '用于保持叙事单元完整。', 120);
+        const selfCheck = toShortText(source.self_check || source.selfCheck || source.note || source.reflection || source.self_review || '', 140);
+        const tags = Array.isArray(source.tags)
+            ? source.tags.map((t) => toShortText(t, 16)).filter(Boolean).slice(0, 4)
+            : [];
+
+        return {
+            id: String(source.id || `b${idx + 1}`),
+            summary: eventSummary,
+            event_summary: eventSummary,
+            entryEvent,
+            exitCondition,
+            split_reason: splitReason,
+            self_check: normalizeSelfCheck(selfCheck),
+            tags,
+            original_text: typeof source.original_text === 'string'
+                ? source.original_text
+                : (typeof source.originalText === 'string' ? source.originalText : ''),
+            split_rule: normalizeSplitRule(source.split_rule || source.splitRule || {}),
+        };
+    }
+
+    function countProcessedMemories() {
+        return AppState.memory.queue.filter((item) => item && item.processed).length;
+    }
+
+    async function persistCurrentState() {
+        if (!MemoryHistoryDB || typeof MemoryHistoryDB.saveState !== 'function') return;
+        try {
+            await MemoryHistoryDB.saveState(countProcessedMemories(), { immediate: true });
+        } catch (error) {
+            ErrorHandler.showUserError(`状态落盘失败：${error?.message || error}`);
+        }
+    }
+
+    async function switchCurrentBeat(offset = 0) {
+        ensureState();
+        const chapterIndex = Math.max(0, Math.min(AppState.experience.currentChapterIndex || 0, Math.max(0, AppState.memory.queue.length - 1)));
+        const memory = getMemory(chapterIndex);
+        if (!memory) {
+            ErrorHandler.showUserError('暂无可切换节拍的章节');
+            return;
+        }
+
+        ensureMemoryRuntime(memory, chapterIndex);
+        const beats = normalizeBeats(memory.chapterScript, memory.chapterOutline || '');
+        const beatCount = beats.length;
+        if (beatCount <= 1) {
+            renderCurrentPanel();
+            ErrorHandler.showUserError('当前章节只有一个节拍，无法切换');
+            return;
+        }
+
+        const maxBeatIndex = beatCount - 1;
+        const currentBeatIndex = Number.isInteger(memory.chapterCurrentBeatIndex)
+            ? Math.max(0, Math.min(memory.chapterCurrentBeatIndex, maxBeatIndex))
+            : 0;
+        const targetBeatIndex = Math.max(0, Math.min(currentBeatIndex + offset, maxBeatIndex));
+
+        if (targetBeatIndex === currentBeatIndex) {
+            if (offset > 0) {
+                ErrorHandler.showUserError('已是最后一个节拍');
+            } else if (offset < 0) {
+                ErrorHandler.showUserError('已是第一个节拍');
+            }
+            renderCurrentPanel();
+            return;
+        }
+
+        memory.chapterCurrentBeatIndex = targetBeatIndex;
+        AppState.experience.currentBeatIndex = targetBeatIndex;
+        renderCurrentPanel();
+        await persistCurrentState();
+        ErrorHandler.showUserSuccess(`已切换到第${targetBeatIndex + 1}节拍（共${beatCount}节拍）`);
+    }
+
+    function parseNodeLines(text) {
+        return String(text || '')
+            .split(/\r?\n/)
+            .map((item) => String(item || '').trim())
+            .filter(Boolean)
+            .slice(0, 12);
+    }
+
+    function parseTagsInput(text) {
+        return String(text || '')
+            .split(/[，,]/)
+            .map((item) => String(item || '').trim())
+            .filter(Boolean)
+            .slice(0, 4);
+    }
+
+    function createEmptyBeatDraft(index = 0) {
+        return {
+            id: `b${index + 1}`,
+            event_summary: `事件点${index + 1}`,
+            original_text: '',
+            entryEvent: '',
+            exitCondition: '等待用户行动或关键互动完成',
+            split_reason: '用于保持叙事单元完整。',
+            self_check: '未提供自检说明。',
+            split_rule: {
+                primary: 'goal_shift',
+                rationale: '默认规则：当前节拍重点在推进阶段目标。',
+            },
+            tags: [],
+        };
+    }
+
+    function normalizeBeatForEditorDraft(rawBeat = {}, index = 0) {
+        const source = rawBeat && typeof rawBeat === 'object' ? rawBeat : {};
+        const splitRule = normalizeSplitRule(source.split_rule || source.splitRule || {});
+        const eventSummary = String(
+            source.event_summary
+            || source.eventSummary
+            || source.summary
+            || source.event
+            || source.description
+            || `事件点${index + 1}`
+        ).trim() || `事件点${index + 1}`;
+
+        return {
+            id: String(source.id || `b${index + 1}`),
+            event_summary: eventSummary,
+            original_text: typeof source.original_text === 'string'
+                ? source.original_text
+                : (typeof source.originalText === 'string' ? source.originalText : ''),
+            entryEvent: String(source.entryEvent || source.entry_event || '').trim(),
+            exitCondition: String(
+                source.exitCondition
+                || source.exit_condition
+                || source.exist_condition
+                || source.existCondition
+                || source['exist condition']
+                || '等待用户行动或关键互动完成'
+            ).trim() || '等待用户行动或关键互动完成',
+            split_reason: String(source.split_reason || source.splitReason || source.reason || '用于保持叙事单元完整。').trim() || '用于保持叙事单元完整。',
+            self_check: normalizeSelfCheck(source.self_check || source.selfCheck || source.note || source.reflection || source.self_review || ''),
+            split_rule: {
+                primary: splitRule.primary,
+                rationale: splitRule.rationale,
+            },
+            tags: Array.isArray(source.tags)
+                ? source.tags.map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 4)
+                : parseTagsInput(source.tags),
+        };
+    }
+
+    function buildEditableDraft(memory, index) {
+        const script = memory.chapterScript && typeof memory.chapterScript === 'object'
+            ? memory.chapterScript
+            : deriveScriptFromOutline(memory.chapterOutline || '');
+        const beatsSource = Array.isArray(script.beats) && script.beats.length > 0
+            ? script.beats
+            : normalizeBeats(script, memory.chapterOutline || '');
+        const beats = beatsSource.map((beat, idx) => normalizeBeatForEditorDraft(beat, idx));
+        const maxBeatIndex = Math.max(0, beats.length - 1);
+        const currentBeatIndex = Number.isInteger(memory.chapterCurrentBeatIndex)
+            ? Math.max(0, Math.min(memory.chapterCurrentBeatIndex, maxBeatIndex))
+            : 0;
+
+        return {
+            chapterOutline: typeof memory.chapterOutline === 'string' ? memory.chapterOutline : deriveOutlineFromContent(memory),
+            keyNodes: Array.isArray(script.keyNodes)
+                ? script.keyNodes.map((item) => String(item || '').trim()).filter(Boolean)
+                : [],
+            beats,
+            chapterCurrentBeatIndex: currentBeatIndex,
+            chapterIndex: index,
+        };
+    }
+
+    function buildEditorBodyHtml(draft) {
+        return `
+<div class="ttw-chapter-editor-modal">
+    <div class="ttw-chapter-editor-tip">本次仅编辑摘要与小剧场节拍字段；开场白仍由章节切换逻辑自动生成。</div>
+    <div class="ttw-chapter-editor-grid">
+        <label class="ttw-editor-field">
+            <span class="ttw-editor-field-label">故事摘要</span>
+            <textarea id="ttw-editor-outline" rows="4" class="ttw-editor-textarea">${escapeHtml(draft.chapterOutline || '')}</textarea>
+        </label>
+        <label class="ttw-editor-field">
+            <span class="ttw-editor-field-label">关键节点（每行一个）</span>
+            <textarea id="ttw-editor-keynodes" rows="4" class="ttw-editor-textarea">${escapeHtml((draft.keyNodes || []).join('\n'))}</textarea>
+        </label>
+    </div>
+    <div class="ttw-editor-beat-header">
+        <strong>小剧场节拍</strong>
+        <button type="button" class="ttw-btn ttw-btn-small" data-editor-action="add-beat">➕ 新增节拍</button>
+    </div>
+    <div id="ttw-editor-beat-list"></div>
+</div>`;
+    }
+
+    function buildEditorBeatCardHtml(beat, index, currentBeatIndex) {
+        return `
+<div class="ttw-beat-editor-card" data-beat-index="${index}">
+    <div class="ttw-beat-editor-head">
+        <span>节拍 ${index + 1}</span>
+        <div class="ttw-beat-editor-head-actions">
+            <label class="ttw-beat-current-label">
+                <input type="radio" name="ttw-editor-current-beat" value="${index}" ${index === currentBeatIndex ? 'checked' : ''}>
+                当前阶段
+            </label>
+            <button type="button" class="ttw-btn ttw-btn-small ttw-btn-danger" data-editor-action="delete-beat" data-index="${index}">删除</button>
+        </div>
+    </div>
+    <label class="ttw-editor-field">
+        <span class="ttw-editor-field-label">事件摘要</span>
+        <textarea rows="2" class="ttw-editor-textarea" data-field="event_summary">${escapeHtml(beat.event_summary || '')}</textarea>
+    </label>
+    <label class="ttw-editor-field">
+        <span class="ttw-editor-field-label">退出条件</span>
+        <textarea rows="2" class="ttw-editor-textarea" data-field="exitCondition">${escapeHtml(beat.exitCondition || '')}</textarea>
+    </label>
+    <label class="ttw-editor-field">
+        <span class="ttw-editor-field-label">节拍原文</span>
+        <textarea rows="5" class="ttw-editor-textarea" data-field="original_text">${escapeHtml(beat.original_text || '')}</textarea>
+    </label>
+</div>`;
+    }
+
+    function renderEditorBeats(modal, draft) {
+        if (!modal) return;
+        const host = modal.querySelector('#ttw-editor-beat-list');
+        if (!host) return;
+
+        if (!Array.isArray(draft.beats) || draft.beats.length === 0) {
+            host.innerHTML = '<div class="ttw-editor-empty">当前无节拍，请点击“新增节拍”。</div>';
+            return;
+        }
+
+        host.innerHTML = draft.beats
+            .map((beat, index) => buildEditorBeatCardHtml(beat, index, draft.chapterCurrentBeatIndex || 0))
+            .join('');
+    }
+
+    function collectEditorDraft(modal, draft) {
+        if (!modal || !draft) return draft;
+        draft.chapterOutline = String(modal.querySelector('#ttw-editor-outline')?.value || '').trim();
+        draft.keyNodes = parseNodeLines(modal.querySelector('#ttw-editor-keynodes')?.value || '');
+
+        const cards = Array.from(modal.querySelectorAll('.ttw-beat-editor-card'));
+        draft.beats = cards.map((card, idx) => {
+            const previous = draft.beats[idx] && typeof draft.beats[idx] === 'object' ? draft.beats[idx] : {};
+            const eventSummary = String(card.querySelector('[data-field="event_summary"]')?.value || '').trim() || `事件点${idx + 1}`;
+
+            return {
+                id: `b${idx + 1}`,
+                event_summary: eventSummary,
+                original_text: String(card.querySelector('[data-field="original_text"]')?.value || ''),
+                entryEvent: '',
+                exitCondition: String(card.querySelector('[data-field="exitCondition"]')?.value || '').trim() || '等待用户行动或关键互动完成',
+                split_reason: String(previous.split_reason || previous.splitReason || '用于保持叙事单元完整。').trim() || '用于保持叙事单元完整。',
+                self_check: normalizeSelfCheck(previous.self_check || previous.selfCheck || ''),
+                split_rule: normalizeSplitRule(previous.split_rule || previous.splitRule || {}),
+                tags: Array.isArray(previous.tags)
+                    ? previous.tags.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 4)
+                    : [],
+            };
+        });
+
+        const currentBeatRadio = modal.querySelector('input[name="ttw-editor-current-beat"]:checked');
+        const parsedCurrent = parseInt(currentBeatRadio?.value || '0', 10);
+        draft.chapterCurrentBeatIndex = Number.isInteger(parsedCurrent) && parsedCurrent >= 0 ? parsedCurrent : 0;
+        if (draft.beats.length === 0) {
+            draft.chapterCurrentBeatIndex = 0;
+        } else {
+            draft.chapterCurrentBeatIndex = Math.max(0, Math.min(draft.chapterCurrentBeatIndex, draft.beats.length - 1));
+        }
+
+        return draft;
+    }
+
+    async function saveChapterEditorDraft(chapterIndex, draft) {
+        const memory = getMemory(chapterIndex);
+        if (!memory) {
+            ErrorHandler.showUserError('保存失败：当前章节不存在');
+            return false;
+        }
+
+        const normalizedBeats = (Array.isArray(draft.beats) ? draft.beats : []).map((beat, index) => {
+            const normalized = normalizeBeatForEditorDraft(beat, index);
+            return {
+                id: `b${index + 1}`,
+                event_summary: normalized.event_summary,
+                summary: normalized.event_summary,
+                original_text: normalized.original_text,
+                entry_event: normalized.entryEvent,
+                entryEvent: normalized.entryEvent,
+                exitCondition: normalized.exitCondition,
+                split_reason: normalized.split_reason,
+                self_check: normalized.self_check,
+                split_rule: normalizeSplitRule(normalized.split_rule || {}),
+                tags: Array.isArray(normalized.tags)
+                    ? normalized.tags.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 4)
+                    : [],
+            };
+        });
+
+        memory.chapterOutline = draft.chapterOutline || deriveOutlineFromContent(memory);
+        memory.chapterScript = {
+            keyNodes: Array.isArray(draft.keyNodes)
+                ? draft.keyNodes.map((item) => String(item || '').trim()).filter(Boolean)
+                : [],
+            beats: normalizedBeats,
+        };
+        memory.chapterCurrentBeatIndex = normalizedBeats.length > 0
+            ? Math.max(0, Math.min(Number.isInteger(draft.chapterCurrentBeatIndex) ? draft.chapterCurrentBeatIndex : 0, normalizedBeats.length - 1))
+            : 0;
+
+        ensureMemoryRuntime(memory, chapterIndex);
+        renderCurrentPanel();
+        renderOutlineList();
+
+        if (MemoryHistoryDB && typeof MemoryHistoryDB.saveState === 'function') {
+            try {
+                await MemoryHistoryDB.saveState(countProcessedMemories());
+                ErrorHandler.showUserSuccess('章节概览已保存并立即落盘。');
+            } catch (error) {
+                ErrorHandler.showUserError(`章节概览已保存，但落盘失败：${error?.message || error}`);
+            }
+        } else {
+            ErrorHandler.showUserSuccess('章节概览已保存。');
+        }
+
+        return true;
+    }
+
+    function closeActiveEditorModal() {
+        if (!activeEditorModal) return;
+        if (ModalFactory && typeof ModalFactory.close === 'function') {
+            ModalFactory.close(activeEditorModal);
+        } else {
+            activeEditorModal.remove();
+        }
+        activeEditorModal = null;
+    }
+
+    function openCurrentChapterEditor() {
+        ensureState();
+        const chapterIndex = Math.max(0, Math.min(AppState.experience.currentChapterIndex || 0, Math.max(0, AppState.memory.queue.length - 1)));
+        const memory = getMemory(chapterIndex);
+        if (!memory) {
+            ErrorHandler.showUserError('暂无可编辑章节，请先生成章节数据。');
+            return;
+        }
+        if (!ModalFactory || typeof ModalFactory.create !== 'function') {
+            ErrorHandler.showUserError('编辑器初始化失败：ModalFactory 不可用。');
+            return;
+        }
+
+        ensureMemoryRuntime(memory, chapterIndex);
+        closeActiveEditorModal();
+        const draft = buildEditableDraft(memory, chapterIndex);
+
+        const modal = ModalFactory.create({
+            id: `ttw-edit-current-chapter-modal-${Date.now()}`,
+            title: `编辑第${chapterIndex + 1}章概览`,
+            body: buildEditorBodyHtml(draft),
+            footer: `
+                <button class="ttw-btn" data-editor-action="cancel">取消</button>
+                <button class="ttw-btn ttw-btn-primary" data-editor-action="save">💾 保存并落盘</button>
+            `,
+            width: '900px',
+            maxWidth: '94vw',
+            maxHeight: '84vh',
+            closeOnOverlay: false,
+            closeOnEscape: false,
+            allowGlobalEscClose: false,
+            onClose: () => {
+                activeEditorModal = null;
+            },
+        });
+
+        activeEditorModal = modal;
+        renderEditorBeats(modal, draft);
+
+        modal.addEventListener('click', async (event) => {
+            const actionEl = event.target.closest('[data-editor-action]');
+            if (!actionEl) return;
+            const action = actionEl.getAttribute('data-editor-action');
+
+            if (action === 'add-beat') {
+                collectEditorDraft(modal, draft);
+                draft.beats.push(createEmptyBeatDraft(draft.beats.length));
+                draft.chapterCurrentBeatIndex = Math.max(0, draft.beats.length - 1);
+                renderEditorBeats(modal, draft);
+                return;
+            }
+
+            if (action === 'delete-beat') {
+                collectEditorDraft(modal, draft);
+                const deleteIndex = parseInt(actionEl.getAttribute('data-index') || '-1', 10);
+                if (Number.isInteger(deleteIndex) && deleteIndex >= 0 && deleteIndex < draft.beats.length) {
+                    draft.beats.splice(deleteIndex, 1);
+                    if (draft.beats.length === 0) {
+                        draft.chapterCurrentBeatIndex = 0;
+                    } else {
+                        draft.chapterCurrentBeatIndex = Math.max(0, Math.min(draft.chapterCurrentBeatIndex, draft.beats.length - 1));
+                    }
+                    renderEditorBeats(modal, draft);
+                }
+                return;
+            }
+
+            if (action === 'cancel') {
+                closeActiveEditorModal();
+                return;
+            }
+
+            if (action === 'save') {
+                collectEditorDraft(modal, draft);
+                actionEl.disabled = true;
+                const success = await saveChapterEditorDraft(chapterIndex, draft);
+                actionEl.disabled = false;
+                if (success) {
+                    closeActiveEditorModal();
+                }
+            }
+        });
+    }
+
+    function deriveOutlineFromContent(memory) {
+        const raw = toShortText(memory.content || '', 200);
+        if (!raw) return `${memory.chapterTitle}剧情推进。`;
+        const firstSentence = raw.split(/[。！？!?]/).map((s) => s.trim()).filter(Boolean).slice(0, 2).join('，');
+        return firstSentence || raw;
+    }
+
+    function deriveScriptFromOutline(outline) {
+        const text = toShortText(outline, 200);
+        const nodes = text
+            .split(/[，,。]/)
+            .map((node) => node.trim())
+            .filter(Boolean)
+            .slice(0, 3);
+
+        return {
+            keyNodes: nodes,
+            beats: nodes.map((node, idx) => ({
+                id: `b${idx + 1}`,
+                event_summary: node,
+                summary: node,
+                entry_event: '',
+                exit_condition: '当本节拍核心事件完成或局势发生明显转折时。',
+                split_reason: '默认切分：用于给章节建立可推进的小剧情单元。',
+                self_check: '默认降级节拍，无完整切分诊断。',
+                tags: [],
+                original_text: '',
+                split_rule: {
+                    primary: 'goal_shift',
+                    rationale: '默认规则：当前节拍重点在推进阶段核心事件。',
+                },
+            })),
+        };
+    }
+
+    function normalizeBeats(script, fallbackOutline) {
+        const beats = Array.isArray(script?.beats) ? script.beats : [];
+        if (beats.length > 0) {
+            return beats.map((beat, idx) => normalizeBeatForView(beat, idx)).slice(0, 8);
+        }
+
+        const fromNodes = Array.isArray(script?.keyNodes)
+            ? script.keyNodes.map((node) => toShortText(node, 80)).filter(Boolean)
+            : [];
+        const fallbackNodes = fromNodes.length > 0
+            ? fromNodes
+            : String(fallbackOutline || '')
+                .split(/[，,。]/)
+                .map((node) => toShortText(node, 80))
+                .filter(Boolean)
+                .slice(0, 4);
+
+        return fallbackNodes.map((summary, idx) => ({
+            id: `b${idx + 1}`,
+            event_summary: summary,
+            summary,
+            entry_event: '',
+            exitCondition: '当本节拍目标完成或局势发生明显转折时。',
+            split_reason: '默认切分：用于给章节建立可推进的小剧情单元。',
+            self_check: '默认降级节拍，无完整切分诊断。',
+            tags: [],
+            original_text: '',
+            split_rule: {
+                primary: 'goal_shift',
+                rationale: '默认规则：当前节拍重点在推进阶段目标。',
+            },
+        }));
+    }
+
+    function statusTag(status) {
+        if (status === 'done') return '<span class="ttw-outline-status ttw-outline-status-done">已生成</span>';
+        if (status === 'generating') return '<span class="ttw-outline-status ttw-outline-status-generating">生成中</span>';
+        if (status === 'failed') return '<span class="ttw-outline-status ttw-outline-status-failed">生成失败</span>';
+        return '<span class="ttw-outline-status ttw-outline-status-pending">待生成</span>';
+    }
+
+    function escapeHtml(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function setSectionVisibility({ showOutline = false, showCurrent = false, showProgress = false, showSettings = false, showPromptEditor = false, showDirectorDebug = false }) {
+        const outlineSection = document.getElementById(selectors.outlineSection);
+        const currentSection = document.getElementById(selectors.currentSection);
+        const progressSection = document.getElementById(selectors.progressSection);
+        const promptEditorSection = document.getElementById(selectors.promptEditorSection);
+        const settingsSection = document.getElementById(selectors.settingsSection);
+        const directorDebugSection = document.getElementById(selectors.directorDebugSection);
+        if (outlineSection) outlineSection.style.display = showOutline ? 'block' : 'none';
+        if (currentSection) currentSection.style.display = showCurrent ? 'block' : 'none';
+        if (progressSection) progressSection.style.display = showProgress ? 'block' : 'none';
+        if (promptEditorSection) promptEditorSection.style.display = showPromptEditor ? 'block' : 'none';
+        if (settingsSection) settingsSection.style.display = showSettings ? 'block' : 'none';
+        if (directorDebugSection) directorDebugSection.style.display = showDirectorDebug ? 'block' : 'none';
+    }
+
+    function getDirectorDebugEntries() {
+        if (!AppState.ui || typeof AppState.ui !== 'object') {
+            AppState.ui = {};
+        }
+        if (!Array.isArray(AppState.ui.directorDebugEntries)) {
+            AppState.ui.directorDebugEntries = [];
+        }
+        return AppState.ui.directorDebugEntries;
+    }
+
+    function formatDebugTime(timestamp) {
+        const date = new Date(Number(timestamp) || Date.now());
+        return date.toLocaleTimeString('zh-CN', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+        });
+    }
+
+    function stringifyDebugValue(value) {
+        if (value === null || value === undefined || value === '') return '无';
+        if (typeof value === 'string') return value;
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch (_) {
+            return String(value);
+        }
+    }
+
+    function buildDebugPreBlock(title, value, options = {}) {
+        const { open = false, compact = false } = options;
+        const className = compact ? 'ttw-director-debug-pre is-compact' : 'ttw-director-debug-pre';
+        return `
+<details class="ttw-director-debug-fold" ${open ? 'open' : ''}>
+    <summary>${escapeHtml(title)}</summary>
+    <pre class="${className}">${escapeHtml(stringifyDebugValue(value))}</pre>
+</details>`;
+    }
+
+    function getSelectedDirectorDebugEntry() {
+        const entries = getDirectorDebugEntries();
+        if (entries.length === 0) return null;
+        const selectedId = AppState.ui.directorDebugSelectedId;
+        return entries.find((entry) => entry.id === selectedId) || entries[0];
+    }
+
+    function formatDirectorDebugEntry(entry) {
+        if (!entry) return '';
+        return [
+            `时间: ${new Date(Number(entry.at) || Date.now()).toLocaleString('zh-CN')}`,
+            `判定来源: ${entry.decisionSource || 'unknown'}`,
+            '',
+            '===== 1. 发给导演 AI API 的提示词原文 =====',
+            stringifyDebugValue(entry.directorPrompt || entry.prompt),
+            '',
+            '===== 2. 导演 AI API 原始返回 =====',
+            stringifyDebugValue(entry.directorRawResponse || '旧记录未保存导演 API 原始返回'),
+            '',
+            '===== 3. 导演 AI 思考/Reasoning（接口返回） =====',
+            stringifyDebugValue(entry.directorReasoning || '当前接口未返回 reasoning/thinking 字段，或该模型未开启/不支持思考内容返回。'),
+            '',
+            '===== 4. 最终注入到演员 AI 的提示词 =====',
+            stringifyDebugValue(entry.actorInjection || entry.injection),
+        ].join('\n');
+    }
+
+    function buildDirectorDebugDetailHtml(entry) {
+        if (!entry) {
+            return '<div class="ttw-director-debug-empty">暂无导演调试记录。发送一轮消息并触发导演后，这里会显示三段链路：导演请求原文、导演 API 原始返回、最终注入演员 AI 的提示词。</div>';
+        }
+
+        const beatText = `${Number(entry.currentBeatIndex ?? 0) + 1} -> ${Number(entry.lockedBeatIndex ?? 0) + 1} / ${entry.beatCount || 0}`;
+        const rawResponse = entry.directorRawResponse || '旧记录未保存导演 API 原始返回';
+
+        return `
+<div class="ttw-director-debug-summary">
+    <div class="ttw-director-debug-metric"><span>章节</span><strong>${escapeHtml(entry.chapterTitle || `第${(entry.chapterIndex ?? 0) + 1}章`)}</strong></div>
+    <div class="ttw-director-debug-metric"><span>节拍</span><strong>${escapeHtml(beatText)}</strong></div>
+    <div class="ttw-director-debug-metric"><span>来源</span><strong>${escapeHtml(entry.decisionSource || 'unknown')}</strong></div>
+</div>
+${buildDebugPreBlock('1. 发给导演 AI API 的提示词原文', entry.directorPrompt || entry.prompt, { open: true })}
+${buildDebugPreBlock('2. 导演 AI API 原始返回', rawResponse, { open: true })}
+${buildDebugPreBlock('3. 导演 AI 思考/Reasoning（接口返回）', entry.directorReasoning || '当前接口未返回 reasoning/thinking 字段，或该模型未开启/不支持思考内容返回。', { open: false })}
+${buildDebugPreBlock('4. 最终注入到演员 AI 的提示词', entry.actorInjection || entry.injection, { open: true })}`;
+    }
+
+    function renderDirectorDebugPanel() {
+        const listEl = document.getElementById(selectors.directorDebugList);
+        const detailEl = document.getElementById(selectors.directorDebugDetail);
+        if (!listEl || !detailEl) return;
+
+        const entries = getDirectorDebugEntries();
+        const selected = getSelectedDirectorDebugEntry();
+        const selectedId = selected?.id || '';
+
+        if (entries.length === 0) {
+            listEl.innerHTML = '<div class="ttw-director-debug-empty">暂无记录</div>';
+            detailEl.innerHTML = buildDirectorDebugDetailHtml(null);
+            return;
+        }
+
+        listEl.innerHTML = entries.map((entry) => {
+            const isSelected = entry.id === selectedId;
+            const chapter = `第${(entry.chapterIndex ?? 0) + 1}章`;
+            const beat = `${Number(entry.lockedBeatIndex ?? 0) + 1}/${entry.beatCount || 0}`;
+            const source = entry.decisionSource || 'unknown';
+            const promptLen = String(entry.directorPrompt || entry.prompt || '').length;
+            const responseLen = String(entry.directorRawResponse || '').length;
+            const injectionLen = String(entry.actorInjection || entry.injection || '').length;
+            const preview = `导演请求 ${promptLen}字 · API返回 ${responseLen}字 · 演员注入 ${injectionLen}字`;
+            return `
+<button type="button" class="ttw-director-debug-item ${isSelected ? 'is-active' : ''}" data-debug-id="${escapeHtml(entry.id)}">
+    <span class="ttw-director-debug-item-head">
+        <strong>${escapeHtml(formatDebugTime(entry.at))}</strong>
+        <em>${escapeHtml(source)}</em>
+    </span>
+    <span class="ttw-director-debug-item-meta">${escapeHtml(chapter)} · 节拍 ${escapeHtml(beat)}</span>
+    <span class="ttw-director-debug-item-preview">${escapeHtml(preview)}</span>
+</button>`;
+        }).join('');
+
+        detailEl.innerHTML = buildDirectorDebugDetailHtml(selected);
+    }
+
+    async function copyDirectorDebugEntry() {
+        const selected = getSelectedDirectorDebugEntry();
+        if (!selected) {
+            ErrorHandler.showUserError('暂无可复制的导演调试记录');
+            return;
+        }
+        const text = formatDirectorDebugEntry(selected);
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                document.execCommand('copy');
+                textarea.remove();
+            }
+            ErrorHandler.showUserSuccess('导演调试记录已复制');
+        } catch (error) {
+            ErrorHandler.showUserError(`复制失败：${error?.message || error}`);
+        }
+    }
+
+    function clearDirectorDebugEntries() {
+        if (!AppState.ui || typeof AppState.ui !== 'object') {
+            AppState.ui = {};
+        }
+        AppState.ui.directorDebugEntries = [];
+        AppState.ui.directorDebugSelectedId = null;
+        renderDirectorDebugPanel();
+    }
+
+    function renderOutlineList() {
+        const listEl = document.getElementById(selectors.outlineList);
+        if (!listEl) return;
+
+        if (AppState.memory.queue.length === 0) {
+            listEl.innerHTML = '<div class="ttw-outline-empty">暂无章节数据，请先导入并完成处理。</div>';
+            return;
+        }
+
+        const html = AppState.memory.queue.map((memory, index) => {
+            ensureMemoryRuntime(memory, index);
+            const title = memory.chapterTitle || `第${index + 1}章`;
+            const outline = memory.chapterOutline || '';
+            const outlineText = outline || (memory.chapterOutlineStatus === 'failed' ? '该章大纲生成失败，请点击重试。' : '该章尚未生成大纲。');
+            const isGenerating = memory.chapterOutlineStatus === 'generating';
+            const rerollLabel = isGenerating ? '⏳ 本章生成中...' : '🔄 重roll本章';
+            const rerollDisabledAttr = isGenerating ? 'disabled style="opacity:0.6;cursor:not-allowed;"' : '';
+
+            return `
+<div class="ttw-outline-item" data-index="${index}">
+    <button class="ttw-outline-toggle" data-action="toggle" data-index="${index}">
+        <span class="ttw-outline-title">${escapeHtml(title)}</span>
+        ${statusTag(memory.chapterOutlineStatus)}
+    </button>
+    <div class="ttw-outline-body" id="ttw-outline-body-${index}" style="display:none;">
+        <div class="ttw-outline-summary">${escapeHtml(outlineText)}</div>
+        <button class="ttw-btn ttw-btn-small" data-action="reroll-chapter-assets" data-index="${index}" ${rerollDisabledAttr}>${rerollLabel}</button>
+        <button class="ttw-btn ttw-btn-small" data-action="view-chapter" data-index="${index}">📖 查看当前章节概览</button>
+    </div>
+</div>`;
+        }).join('');
+
+        listEl.innerHTML = html;
+    }
+
+    function buildScriptHtml(memory) {
+        const script = memory.chapterScript && typeof memory.chapterScript === 'object'
+            ? memory.chapterScript
+            : deriveScriptFromOutline(memory.chapterOutline);
+
+        const beats = normalizeBeats(script, memory.chapterOutline || '');
+        const currentBeatIndex = Number.isInteger(memory.chapterCurrentBeatIndex) ? memory.chapterCurrentBeatIndex : 0;
+        const beatCards = beats.length > 0
+            ? beats.map((beat, idx) => {
+                const isActive = idx === currentBeatIndex;
+                const originalText = typeof beat.original_text === 'string' ? beat.original_text : '';
+                return `<div class="ttw-beat-item ${isActive ? 'is-active' : ''}">
+    <div class="ttw-beat-item-head">
+        <span class="ttw-beat-id">${escapeHtml(beat.id || `b${idx + 1}`)}</span>
+        ${isActive ? '<span class="ttw-beat-active">当前阶段</span>' : ''}
+    </div>
+    <div class="ttw-beat-line ttw-beat-summary-line">📖 事件摘要：${escapeHtml(beat.event_summary || beat.summary || '')}</div>
+    <div class="ttw-beat-line ttw-beat-exit-line">🎯 退出条件：${escapeHtml(beat.exitCondition || '等待关键互动完成')}</div>
+    <details class="ttw-beat-original-fold">
+        <summary>📄 节拍原文</summary>
+        <div class="ttw-beat-original">${escapeHtml(originalText || '暂无该节拍原文')}</div>
+    </details>
+</div>`;
+            }).join('')
+            : '<div class="ttw-script-empty">暂无轻节拍，默认按摘要推进。</div>';
+
+        return `
+<div class="ttw-script-block">
+    <div class="ttw-script-field">
+        <div class="ttw-script-field-title">轻节拍器（事件点）</div>
+        <div class="ttw-beat-list">${beatCards}</div>
+    </div>
+</div>`;
+    }
+
+    function renderCurrentPanel() {
+        ensureState();
+        const idx = Math.max(0, Math.min(AppState.experience.currentChapterIndex || 0, Math.max(0, AppState.memory.queue.length - 1)));
+        AppState.experience.currentChapterIndex = idx;
+
+        const memory = getMemory(idx);
+        const titleEl = document.getElementById(selectors.currentTitle);
+        const summaryEl = document.getElementById(selectors.currentSummary);
+        const scriptEl = document.getElementById(selectors.currentScript);
+        const openingEl = document.getElementById(selectors.currentOpening);
+        const hintEl = document.getElementById(selectors.chapterHint);
+        const prevBeatBtn = document.getElementById(selectors.prevBeatButton);
+        const nextBeatBtn = document.getElementById(selectors.nextBeatButton);
+        const nextBtn = document.getElementById(selectors.nextButton);
+
+        if (!memory) {
+            if (titleEl) titleEl.textContent = '当前章节概览';
+            if (summaryEl) summaryEl.textContent = '暂无章节数据';
+            if (scriptEl) scriptEl.innerHTML = '<div class="ttw-script-empty">暂无剧本数据</div>';
+            if (openingEl) openingEl.textContent = '暂无开场白';
+            if (hintEl) hintEl.textContent = '暂无章节数据';
+            if (prevBeatBtn) prevBeatBtn.disabled = true;
+            if (nextBeatBtn) nextBeatBtn.disabled = true;
+            if (nextBtn) nextBtn.disabled = true;
+            return;
+        }
+
+        ensureMemoryRuntime(memory, idx);
+
+        const title = memory.chapterTitle || `第${idx + 1}章`;
+        const outline = memory.chapterOutline || deriveOutlineFromContent(memory);
+        const beats = normalizeBeats(memory.chapterScript, memory.chapterOutline || '');
+        const beatCount = beats.length;
+        const maxBeatIndex = Math.max(0, beatCount - 1);
+        const currentBeatIndex = beatCount > 0
+            ? (Number.isInteger(memory.chapterCurrentBeatIndex)
+                ? Math.max(0, Math.min(memory.chapterCurrentBeatIndex, maxBeatIndex))
+                : 0)
+            : 0;
+        memory.chapterCurrentBeatIndex = currentBeatIndex;
+        if (!memory.chapterOutline) {
+            memory.chapterOutline = outline;
+        }
+
+        if (titleEl) titleEl.textContent = title;
+        if (summaryEl) summaryEl.textContent = outline;
+        if (scriptEl) scriptEl.innerHTML = buildScriptHtml(memory);
+
+        if (memory.chapterOpeningGenerating) {
+            if (openingEl) openingEl.textContent = '正在生成开场白...';
+        } else if (memory.chapterOpeningPreview) {
+            if (openingEl) openingEl.textContent = memory.chapterOpeningPreview;
+        } else if (memory.chapterOpeningError) {
+            if (openingEl) openingEl.textContent = `开场白生成失败：${memory.chapterOpeningError}`;
+        } else {
+            if (openingEl) {
+                openingEl.textContent = idx === 0
+                    ? '点击“开始阅读第一章”后将自动生成并发送开场白。'
+                    : '该章开场白会在你从上一章点击“下一章”进入时生成并发送。';
+            }
+        }
+
+        const isLast = idx >= AppState.memory.queue.length - 1;
+        if (prevBeatBtn) {
+            prevBeatBtn.disabled = beatCount <= 1 || currentBeatIndex <= 0;
+        }
+        if (nextBeatBtn) {
+            nextBeatBtn.disabled = beatCount <= 1 || currentBeatIndex >= maxBeatIndex;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = isLast;
+            nextBtn.textContent = isLast ? '最后一章' : '下一章';
+        }
+        if (hintEl) {
+            hintEl.textContent = beatCount > 0
+                ? `当前节拍 ${currentBeatIndex + 1}/${beatCount}`
+                : '暂无节拍';
+        }
+    }
+
+    function toHeadSnippet(text, maxLen = 100) {
+        const plain = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!plain) return '';
+        return plain.slice(0, maxLen).trim();
+    }
+
+    function toTailSnippet(text, maxLen = 100) {
+        const plain = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!plain) return '';
+        if (plain.length <= maxLen) return plain;
+        return plain.slice(Math.max(0, plain.length - maxLen)).trim();
+    }
+
+    function getFirstBeatLeadSnippet(memory, maxLen = 100) {
+        const beats = Array.isArray(memory?.chapterScript?.beats) ? memory.chapterScript.beats : [];
+        const firstBeat = beats[0] && typeof beats[0] === 'object' ? beats[0] : null;
+        if (!firstBeat) return '';
+
+        const firstBeatText = String(
+            firstBeat.original_text
+            || firstBeat.originalText
+            || firstBeat.event_summary
+            || firstBeat.eventSummary
+            || firstBeat.summary
+            || ''
+        ).trim();
+        return toHeadSnippet(firstBeatText, maxLen);
+    }
+
+    function buildCurrentChapterLeadSnippet(memory, maxLen = 100) {
+        const beatLead = getFirstBeatLeadSnippet(memory, maxLen);
+        if (beatLead) return beatLead;
+
+        const contentLead = toHeadSnippet(memory?.content || '', maxLen);
+        if (contentLead) return contentLead;
+
+        return toHeadSnippet(memory?.chapterOutline || '', maxLen);
+    }
+
+    function collectLatestAssistantTail(maxLen = 100) {
+        try {
+            const st = typeof SillyTavern !== 'undefined' ? SillyTavern : null;
+            if (!st || typeof st.getContext !== 'function') return '';
+            const context = st.getContext();
+            const chat = Array.isArray(context?.chat) ? context.chat : [];
+            if (chat.length === 0) return '';
+
+            for (let i = chat.length - 1; i >= 0; i--) {
+                const item = chat[i];
+                const text = String(item?.mes || item?.content || '').trim();
+                if (!text) continue;
+                if (item?.is_user) continue;
+                return toTailSnippet(text, maxLen);
+            }
+            return '';
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function resolveOpeningAnchors(memory, index) {
+        const assistantTail = collectLatestAssistantTail(100);
+        const currentLead = buildCurrentChapterLeadSnippet(memory, 100);
+
+        if (assistantTail) {
+            return {
+                carryOver: assistantTail,
+                carrySource: 'latest-assistant-tail',
+                leadIn: currentLead,
+            };
+        }
+
+        if (index === 0) {
+            return {
+                carryOver: currentLead,
+                carrySource: 'chapter1-current-head',
+                leadIn: currentLead,
+            };
+        }
+
+        return {
+            carryOver: '',
+            carrySource: 'none',
+            leadIn: currentLead,
+        };
+    }
+
+    function buildChapterLeadSnippet(memory, minLen = 50, maxLen = 100) {
+        const plain = String(buildCurrentChapterLeadSnippet(memory, maxLen) || '').replace(/\s+/g, ' ').trim();
+        if (!plain) return '';
+
+        let snippet = plain.slice(0, maxLen);
+        const punctIndex = snippet.search(/[。！？!?]/);
+        if (punctIndex >= minLen - 1) {
+            snippet = snippet.slice(0, punctIndex + 1);
+        }
+        if (snippet.length < minLen && plain.length > snippet.length) {
+            snippet = plain.slice(0, Math.min(maxLen, Math.max(minLen, plain.length)));
+        }
+        return snippet.trim();
+    }
+
+    function trimOpeningText(text, minLen = 50, maxLen = 200) {
+        let normalized = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!normalized) return '';
+
+        if (normalized.length > maxLen) {
+            const sliced = normalized.slice(0, maxLen);
+            const boundary = Math.max(
+                sliced.lastIndexOf('。'),
+                sliced.lastIndexOf('！'),
+                sliced.lastIndexOf('？'),
+                sliced.lastIndexOf('!'),
+                sliced.lastIndexOf('?')
+            );
+            normalized = boundary >= minLen - 1 ? sliced.slice(0, boundary + 1) : sliced;
+        }
+
+        return normalized;
+    }
+
+    function buildOpeningFallback(memory, index) {
+        const title = memory.chapterTitle || `第${index + 1}章`;
+        const chapterSummaryLead = toHeadSnippet(memory?.chapterOutline || '', 36);
+        const { carryOver, leadIn } = resolveOpeningAnchors(memory, index);
+        const carryPart = carryOver || `${title}${chapterSummaryLead ? `，${chapterSummaryLead}` : ''}`;
+        const leadPart = leadIn || buildChapterLeadSnippet(memory, 50, 100) || '你收拢思绪，准备接住眼前即将展开的变化。';
+        const carryWithPunc = /[。！？!?]$/.test(carryPart) ? carryPart : `${carryPart}。`;
+        const fallback = `${carryWithPunc}${leadPart}`;
+        return trimOpeningText(fallback, 50, 200);
+    }
+
+    function sanitizeOpeningText(raw, memory, index) {
+        const text = trimOpeningText(String(raw || '')
+            .replace(/^```[a-z]*\s*/i, '')
+            .replace(/\s*```$/i, '')
+            .trim(), 50, 200);
+        if (!text) {
+            return buildOpeningFallback(memory, index);
+        }
+        return text;
+    }
+
+    async function generateOpeningText(memory, index) {
+        const chapterTitle = memory.chapterTitle || `第${index + 1}章`;
+        const chapterSummary = toHeadSnippet(memory?.chapterOutline || '', 48) || '无';
+        const { carryOver, carrySource, leadIn } = resolveOpeningAnchors(memory, index);
+        const carryText = carryOver || '无可用AI尾部承接（非首章且聊天中暂无AI输出）';
+        const leadText = leadIn || buildChapterLeadSnippet(memory, 50, 100) || '本章开头素材缺失';
+
+        const prompt = `${getLanguagePrefix()}你是互动小说旁白。请生成“承上启下型开场白”。
+
+硬性要求：
+1) 仅输出 100 字以内中文，不要解释规则，不要输出JSON，不要分点。
+2) 只能用于衔接上文并引入本章，不要推进剧情。
+3) 先承上，再启下：承上必须参考“承上素材（尾部截断）”；启下必须参考“启下素材（头部截断）”。
+4) 不得泄露本章后续目标、流程、关键节点、核心冲突、转折或结局。
+
+当前章节：${chapterTitle}
+当前章节摘要（参考）：${chapterSummary}
+承上来源：${carrySource}
+承上素材（尾部截断100字）：${carryText}
+启下素材（头部截断100字）：${leadText}
+
+请直接输出开场白正文：`;
+
+        const response = await callAPI(prompt, index + 1);
+        return sanitizeOpeningText(response, memory, index);
+    }
+
+    async function pushOpeningMessage(text, index) {
+        const st = typeof SillyTavern !== 'undefined' ? SillyTavern : null;
+        if (!st || typeof st.getContext !== 'function') {
+            throw new Error('无法访问SillyTavern上下文');
+        }
+
+        const context = st.getContext();
+        if (!context || !Array.isArray(context.chat)) {
+            throw new Error('当前聊天上下文不可用');
+        }
+
+        const openingMessage = {
+            is_user: false,
+            mes: text,
+            _westworld_auto_opening: true,
+            _westworld_chapter: index + 1,
+            _storyweaver_auto_opening: true,
+            _storyweaver_chapter: index + 1,
+            _generatedAt: Date.now(),
+        };
+
+        if (typeof context.addOneMessage === 'function') {
+            await context.addOneMessage(openingMessage);
+            return;
+        }
+
+        context.chat.push(openingMessage);
+
+        if (typeof context.saveChat === 'function') {
+            await context.saveChat();
+        }
+        if (typeof context.reloadCurrentChat === 'function') {
+            await context.reloadCurrentChat();
+        } else if (typeof context.renderChat === 'function') {
+            context.renderChat();
+        }
+    }
+
+    async function ensureOpeningForChapter(index) {
+        const memory = getMemory(index);
+        if (!memory) return;
+        ensureMemoryRuntime(memory, index);
+        if (memory.chapterOpeningSent || memory.chapterOpeningGenerating) {
+            return;
+        }
+
+        memory.chapterOpeningGenerating = true;
+        memory.chapterOpeningError = '';
+        renderCurrentPanel();
+
+        try {
+            const opening = await generateOpeningText(memory, index);
+            memory.chapterOpeningPreview = opening;
+
+            try {
+                await pushOpeningMessage(opening, index);
+                memory.chapterOpeningSent = true;
+            } catch (sendError) {
+                memory.chapterOpeningSent = false;
+                memory.chapterOpeningError = String(sendError?.message || '发送失败');
+                ErrorHandler.showUserError(`开场白发送失败：${memory.chapterOpeningError}`);
+            }
+        } catch (error) {
+            const fallback = buildOpeningFallback(memory, index);
+            memory.chapterOpeningPreview = fallback;
+            try {
+                await pushOpeningMessage(fallback, index);
+                memory.chapterOpeningSent = true;
+                memory.chapterOpeningError = '开场白生成失败，已使用安全降级文案发送。';
+            } catch (sendError) {
+                memory.chapterOpeningSent = false;
+                memory.chapterOpeningError = String(sendError?.message || error?.message || '开场白生成失败');
+                ErrorHandler.showUserError(`开场白生成失败：${memory.chapterOpeningError}`);
+            }
+        } finally {
+            memory.chapterOpeningGenerating = false;
+            renderCurrentPanel();
+        }
+    }
+
+    async function enterChapter(index, options = {}) {
+        const { triggerOpening = true } = options;
+        if (index < 0 || index >= AppState.memory.queue.length) return;
+        ensureState();
+        AppState.experience.currentChapterIndex = index;
+        renderCurrentPanel();
+        if (triggerOpening) {
+            await ensureOpeningForChapter(index);
+        }
+    }
+
+    async function showCurrentChapterPanelInternal() {
+        persistLastModalView('current');
+        setModeTabActive('current');
+        setTxtSectionsVisible(false);
+        setResultSectionVisibleForMode('current');
+        setSectionVisibility({ showOutline: false, showCurrent: true, showProgress: false });
+        renderCurrentPanel();
+    }
+
+    function showStoryOutlinePanelInternal() {
+        persistLastModalView('outline');
+        setModeTabActive('outline');
+        setTxtSectionsVisible(false);
+        setResultSectionVisibleForMode('outline');
+        setSectionVisibility({ showOutline: true, showCurrent: false, showProgress: false });
+        renderOutlineList();
+    }
+
+    function showProgressPanelInternal() {
+        persistLastModalView('progress');
+        setModeTabActive('progress');
+        setTxtSectionsVisible(false);
+        setResultSectionVisibleForMode('progress');
+        setSectionVisibility({ showOutline: false, showCurrent: false, showProgress: true });
+        const streamContainer = document.getElementById('ttw-stream-container');
+        if (streamContainer) streamContainer.style.display = 'block';
+        const streamToggle = document.getElementById('ttw-toggle-stream');
+        if (streamToggle) streamToggle.textContent = '🙈 隐藏日志';
+    }
+
+    function showDirectorDebugPanelInternal() {
+        persistLastModalView('director-debug');
+        setModeTabActive('director-debug');
+        setTxtSectionsVisible(false);
+        setResultSectionVisibleForMode('director-debug');
+        setSectionVisibility({ showOutline: false, showCurrent: false, showProgress: false, showDirectorDebug: true });
+        renderDirectorDebugPanel();
+    }
+
+    function showTxtConverterPanel() {
+        persistLastModalView('txt');
+        setModeTabActive('txt');
+        setTxtSectionsVisible(true);
+        setResultSectionVisibleForMode('txt');
+        setSectionVisibility({ showOutline: false, showCurrent: false, showProgress: false });
+    }
+
+    function showSettingsPanelInternal() {
+        persistLastModalView('settings');
+        setModeTabActive('settings');
+        setTxtSectionsVisible(false);
+        setResultSectionVisibleForMode('settings');
+        setSectionVisibility({ showOutline: false, showCurrent: false, showProgress: false, showSettings: true });
+    }
+
+    function showPromptEditorPanelInternal() {
+        persistLastModalView('prompt-editor');
+        setModeTabActive('prompt-editor');
+        setTxtSectionsVisible(false);
+        setResultSectionVisibleForMode('settings');
+        setSectionVisibility({ showOutline: false, showCurrent: false, showProgress: false, showSettings: false, showPromptEditor: true });
+    }
+
+    async function handleOutlineAction(action, index) {
+        if (action === 'toggle') {
+            const body = document.getElementById(`ttw-outline-body-${index}`);
+            if (body) {
+                body.style.display = body.style.display === 'none' ? 'block' : 'none';
+            }
+            return;
+        }
+
+        if (action === 'retry-outline' || action === 'reroll-chapter-assets') {
+            try {
+                await retryChapterOutline(index);
+                const memory = getMemory(index);
+                if (memory) {
+                    ensureMemoryRuntime(memory, index);
+                    memory.chapterOpeningPreview = '';
+                    memory.chapterOpeningSent = false;
+                    memory.chapterOpeningError = '';
+                    memory.chapterOpeningGenerating = false;
+                }
+                ErrorHandler.showUserSuccess(`第${index + 1}章重roll成功（摘要/小剧本/开场白已重置）`);
+            } catch (error) {
+                ErrorHandler.showUserError(`第${index + 1}章重roll失败：${error.message}`);
+            }
+            renderOutlineList();
+            renderCurrentPanel();
+            return;
+        }
+
+        if (action === 'view-chapter') {
+            await enterChapter(index, { triggerOpening: false });
+            await showCurrentChapterPanelInternal();
+            return;
+        }
+    }
+
+    function bindOutlineEvents() {
+        const listEl = document.getElementById(selectors.outlineList);
+        if (listEl && !listEl.dataset.bound) {
+            listEl.dataset.bound = '1';
+            listEl.addEventListener('click', async (event) => {
+                const target = event.target.closest('[data-action]');
+                if (!target) return;
+                const action = target.getAttribute('data-action');
+                const index = parseInt(target.getAttribute('data-index') || '-1', 10);
+                if (Number.isNaN(index) || index < 0) return;
+                await handleOutlineAction(action, index);
+            });
+        }
+
+        const startBtn = document.getElementById(selectors.startFirstButton);
+        if (startBtn && !startBtn.dataset.bound) {
+            startBtn.dataset.bound = '1';
+            startBtn.addEventListener('click', async () => {
+                await enterChapter(0);
+                await showCurrentChapterPanelInternal();
+            });
+        }
+    }
+
+    function bindViewModeEvents() {
+        const nav = document.getElementById(selectors.viewTabs);
+        if (!nav || nav.dataset.bound) return;
+
+        nav.dataset.bound = '1';
+        nav.addEventListener('click', async (event) => {
+            const btn = event.target.closest('.ttw-view-tab[data-view]');
+            if (!btn) return;
+
+            const view = btn.getAttribute('data-view');
+            if (view === 'txt') {
+                showTxtConverterPanel();
+                return;
+            }
+            if (view === 'outline') {
+                showStoryOutlinePanelInternal();
+                return;
+            }
+            if (view === 'current') {
+                await showCurrentChapterPanelInternal();
+                return;
+            }
+            if (view === 'progress') {
+                showProgressPanelInternal();
+                return;
+            }
+            if (view === 'director-debug') {
+                showDirectorDebugPanelInternal();
+                return;
+            }
+            if (view === 'settings') {
+                showSettingsPanelInternal();
+                return;
+            }
+            if (view === 'prompt-editor') {
+                showPromptEditorPanelInternal();
+                return;
+            }
+        });
+    }
+
+    function bindCurrentEvents() {
+        const prevBeatBtn = document.getElementById(selectors.prevBeatButton);
+        if (prevBeatBtn && !prevBeatBtn.dataset.bound) {
+            prevBeatBtn.dataset.bound = '1';
+            prevBeatBtn.addEventListener('click', async () => {
+                await switchCurrentBeat(-1);
+            });
+        }
+
+        const nextBeatBtn = document.getElementById(selectors.nextBeatButton);
+        if (nextBeatBtn && !nextBeatBtn.dataset.bound) {
+            nextBeatBtn.dataset.bound = '1';
+            nextBeatBtn.addEventListener('click', async () => {
+                await switchCurrentBeat(1);
+            });
+        }
+
+        const nextBtn = document.getElementById(selectors.nextButton);
+        if (nextBtn && !nextBtn.dataset.bound) {
+            nextBtn.dataset.bound = '1';
+            nextBtn.addEventListener('click', async () => {
+                ensureState();
+                const nextIndex = (AppState.experience.currentChapterIndex || 0) + 1;
+                if (nextIndex >= AppState.memory.queue.length) {
+                    ErrorHandler.showUserError('已是最后一章');
+                    return;
+                }
+                await enterChapter(nextIndex);
+            });
+        }
+
+        const editBtn = document.getElementById(selectors.editButton);
+        if (editBtn && !editBtn.dataset.bound) {
+            editBtn.dataset.bound = '1';
+            editBtn.addEventListener('click', () => {
+                openCurrentChapterEditor();
+            });
+        }
+    }
+
+    function bindDirectorDebugEvents() {
+        const listEl = document.getElementById(selectors.directorDebugList);
+        if (listEl && !listEl.dataset.bound) {
+            listEl.dataset.bound = '1';
+            listEl.addEventListener('click', (event) => {
+                const item = event.target.closest('.ttw-director-debug-item[data-debug-id]');
+                if (!item) return;
+                AppState.ui.directorDebugSelectedId = item.getAttribute('data-debug-id') || null;
+                renderDirectorDebugPanel();
+            });
+        }
+
+        const refreshBtn = document.getElementById(selectors.directorDebugRefreshButton);
+        if (refreshBtn && !refreshBtn.dataset.bound) {
+            refreshBtn.dataset.bound = '1';
+            refreshBtn.addEventListener('click', renderDirectorDebugPanel);
+        }
+
+        const copyBtn = document.getElementById(selectors.directorDebugCopyButton);
+        if (copyBtn && !copyBtn.dataset.bound) {
+            copyBtn.dataset.bound = '1';
+            copyBtn.addEventListener('click', () => {
+                void copyDirectorDebugEntry();
+            });
+        }
+
+        const clearBtn = document.getElementById(selectors.directorDebugClearButton);
+        if (clearBtn && !clearBtn.dataset.bound) {
+            clearBtn.dataset.bound = '1';
+            clearBtn.addEventListener('click', clearDirectorDebugEntries);
+        }
+
+        if (!directorDebugWindowEventBound) {
+            directorDebugWindowEventBound = true;
+            window.addEventListener('westworld:director-debug-updated', () => {
+                const section = document.getElementById(selectors.directorDebugSection);
+                if (section && section.style.display !== 'none') {
+                    renderDirectorDebugPanel();
+                }
+            });
+        }
+    }
+
+    function preparePanels() {
+        bindViewModeEvents();
+        bindOutlineEvents();
+        bindCurrentEvents();
+        bindDirectorDebugEvents();
+    }
+
+    return {
+        showTxtConverterPanel: () => {
+            preparePanels();
+            showTxtConverterPanel();
+        },
+        showStoryOutlinePanel: () => {
+            preparePanels();
+            showStoryOutlinePanelInternal();
+        },
+        showCurrentChapterPanel: async () => {
+            preparePanels();
+            await showCurrentChapterPanelInternal();
+        },
+        showProgressPanel: () => {
+            preparePanels();
+            showProgressPanelInternal();
+        },
+        showDirectorDebugPanel: () => {
+            preparePanels();
+            showDirectorDebugPanelInternal();
+        },
+        showSettingsPanel: () => {
+            preparePanels();
+            showSettingsPanelInternal();
+        },
+        showPromptEditorPanel: () => {
+            preparePanels();
+            showPromptEditorPanelInternal();
+        },
+        renderStoryOutline: () => {
+            preparePanels();
+            renderOutlineList();
+        },
+        renderCurrentChapter: () => {
+            preparePanels();
+            renderCurrentPanel();
+        },
+    };
+}
