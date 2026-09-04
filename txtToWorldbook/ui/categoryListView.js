@@ -11,19 +11,42 @@ export function createCategoryListView(deps = {}) {
         resetSingleCategory,
     } = deps;
 
+    function isValidCategory(category) {
+        return !!category
+            && typeof category === 'object'
+            && String(category.name || '').trim().length > 0;
+    }
+
+    function ensureRenderableCategories() {
+        if (!AppState.persistent) AppState.persistent = {};
+        const currentCategories = Array.isArray(AppState.persistent.customCategories)
+            ? AppState.persistent.customCategories.filter(isValidCategory)
+            : [];
+        const validDefaults = Array.isArray(defaultCategories)
+            ? defaultCategories.filter(isValidCategory)
+            : [];
+        const mergedCategories = [...currentCategories];
+
+        // 内置分类必须始终可选，避免历史空数据/脏数据让“提示词配置”区域变空。
+        for (const defaultCategory of validDefaults) {
+            const exists = mergedCategories.some((category) => category.name === defaultCategory.name);
+            if (!exists) mergedCategories.push(JSON.parse(JSON.stringify(defaultCategory)));
+        }
+
+        AppState.persistent.customCategories = mergedCategories;
+        return mergedCategories;
+    }
+
     function renderCategoriesList() {
         const listContainer = document.getElementById('ttw-categories-list');
         if (!listContainer) return;
 
-        if (!Array.isArray(AppState.persistent.customCategories)
-            || AppState.persistent.customCategories.length === 0) {
-            AppState.persistent.customCategories = JSON.parse(JSON.stringify(defaultCategories));
-        }
+        const renderableCategories = ensureRenderableCategories();
 
         const primaryOrder = ['角色', '地点', '组织', '道具', '章节剧情'];
         const primaryOrderMap = new Map(primaryOrder.map((name, index) => [name, index]));
 
-        const sortedCategories = AppState.persistent.customCategories
+        const sortedCategories = renderableCategories
             .map((cat, index) => ({ cat, originalIndex: index }))
             .sort((a, b) => {
                 const aRank = primaryOrderMap.has(a.cat.name) ? primaryOrderMap.get(a.cat.name) : Number.MAX_SAFE_INTEGER;

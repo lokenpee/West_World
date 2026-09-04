@@ -87,7 +87,7 @@ ${buildApiConfigCard('director', '🎬 导演AI配置')}
     </div>`;
 }
 
-const PLUGIN_VERSION = 'A1.5';
+const PLUGIN_VERSION = 'A1.6';
 
 function buildPluginUpdateHtml() {
     return '';
@@ -390,7 +390,8 @@ function buildCategoriesSectionHtml() {
         <div class="ttw-category-flat-header">
             <span>🏷️ 提取分类</span>
         </div>
-        <div id="ttw-categories-list" class="ttw-categories-list"></div>
+        <div class="ttw-setting-hint" style="margin-bottom:8px;">勾选的分类会在解析 TXT 时被提取；内置提供 👤 角色、📍 地点。</div>
+        <div id="ttw-categories-list" class="ttw-categories-list" aria-live="polite"></div>
     </div>`;
 }
 

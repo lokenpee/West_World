@@ -45,13 +45,21 @@ export function createCategoryPersistenceService(deps) {
         }
     }
 
+    function isValidCategory(category) {
+        return !!category
+            && typeof category === 'object'
+            && String(category.name || '').trim().length > 0;
+    }
+
     function syncSavedCategoriesWithDefaults(savedCategories = []) {
-        const defaults = Array.isArray(defaultWorldbookCategories) ? defaultWorldbookCategories : [];
+        const defaults = Array.isArray(defaultWorldbookCategories)
+            ? defaultWorldbookCategories.filter(isValidCategory)
+            : [];
         const defaultByName = new Map(defaults.map((category) => [category.name, category]));
         const synced = [];
         const seenDefaultNames = new Set();
 
-        for (const saved of (Array.isArray(savedCategories) ? savedCategories : [])) {
+        for (const saved of (Array.isArray(savedCategories) ? savedCategories : []).filter(isValidCategory)) {
             const defaultCategory = defaultByName.get(saved?.name);
             if (!defaultCategory) {
                 synced.push(saved);
@@ -92,7 +100,9 @@ export function createCategoryPersistenceService(deps) {
         try {
             const saved = await MemoryHistoryDB.getCustomCategories();
             if (saved && Array.isArray(saved) && saved.length > 0) {
-                AppState.persistent.customCategories = saved;
+                // 历史配置可能包含 null/空名称，也可能缺少内置分类；先归一化，
+                // 保证“角色/地点”始终出现在提取分类中，再进入指纹同步流程。
+                AppState.persistent.customCategories = syncSavedCategoriesWithDefaults(saved);
                 hasLoadedSavedCategories = true;
             }
         } catch (error) {
@@ -138,7 +148,7 @@ export function createCategoryPersistenceService(deps) {
     }
 
     function getEnabledCategories() {
-        return AppState.persistent.customCategories.filter(category => category.enabled);
+        return AppState.persistent.customCategories.filter(category => isValidCategory(category) && category.enabled);
     }
 
     function generateDynamicJsonTemplate() {
