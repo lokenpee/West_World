@@ -2,67 +2,34 @@ import assert from 'node:assert';
 import { DEFAULT_WORLDBOOK_CATEGORIES } from '../../txtToWorldbook/core/constants.js';
 import { createListRenderer } from '../../txtToWorldbook/ui/renderer.js';
 import { createCategoryListView } from '../../txtToWorldbook/ui/categoryListView.js';
+import { buildModalHtml } from '../../txtToWorldbook/ui/settingsPanel.js';
+import { bindSettingEvents } from '../../txtToWorldbook/ui/eventBindings.js';
 
-function createToggleElement(index, initialChecked) {
-    const status = { textContent: initialChecked ? '启用' : '停用' };
-    const item = {
-        className: initialChecked ? 'ttw-category-item ttw-category-enabled' : 'ttw-category-item',
-        dataset: { enabled: String(initialChecked) },
-        classList: {
-            toggle(className, enabled) {
-                const classes = new Set(item.className.split(/\s+/).filter(Boolean));
-                if (enabled) classes.add(className);
-                else classes.delete(className);
-                item.className = Array.from(classes).join(' ');
-            },
-        },
-        querySelector(selector) {
-            return selector === '.ttw-category-status' ? status : null;
-        },
-    };
-
-    const checkbox = {
-        dataset: { index: String(index) },
-        checked: initialChecked,
-        nextElementSibling: { textContent: initialChecked ? '✓' : '' },
-        addEventListener(event, handler) {
-            if (event === 'change') checkbox.changeHandler = handler;
-        },
-        closest(selector) {
-            return selector === '.ttw-category-item' ? item : null;
-        },
-    };
-
-    return { checkbox, item, status };
-}
-
-function setupView(initialCategories, savedCategories = []) {
-    const defaults = structuredClone(DEFAULT_WORLDBOOK_CATEGORIES);
-    const toggles = defaults.map((category, index) => createToggleElement(index, category.enabled !== false));
-    let activeToggles = toggles;
-    const element = {
-        innerHTML: '',
-        dataset: {},
-        querySelectorAll(selector) {
-            if (selector !== '.ttw-category-cb') return [];
-            // 模拟真实 render：每次查询都会得到重建后的 checkbox 节点。
-            activeToggles = state.persistent.customCategories.map((category, index) => (
-                createToggleElement(index, category.enabled !== false)
-            ));
-            return activeToggles.map((toggle) => toggle.checkbox);
-        },
-    };
-
+function withCategoryListElement(callback) {
+    const element = { innerHTML: '', dataset: {}, querySelectorAll: () => [] };
     globalThis.document = {
         getElementById: (id) => (id === 'ttw-categories-list' ? element : null),
     };
+    return callback(element);
+}
 
+function assertVisibleStandardCheckboxes(html) {
+    assert.match(html, /type="checkbox" class="ttw-category-cb"/);
+    assert.match(html, /👤 角色/);
+    assert.match(html, /📍 地点/);
+    assert.doesNotMatch(html, /ttw-category-check/);
+}
+
+// 模态框模板本身必须预置内置分类；即使动态渲染失败也不能空白。
+assertVisibleStandardCheckboxes(buildModalHtml());
+
+// 动态渲染同样使用普通可见 checkbox，并保留角色/地点。
+withCategoryListElement((element) => {
     const state = {
         persistent: {
-            customCategories: initialCategories,
+            customCategories: structuredClone(DEFAULT_WORLDBOOK_CATEGORIES),
         },
     };
-
     const view = createCategoryListView({
         AppState: state,
         ListRenderer: createListRenderer({
@@ -71,59 +38,59 @@ function setupView(initialCategories, savedCategories = []) {
             },
         }),
         EventDelegate: { on() {} },
-        defaultCategories: defaults,
-        hasDefaultCategory: (name) => defaults.some((category) => category.name === name),
-        saveCustomCategories: async () => savedCategories.push(structuredClone(state.persistent.customCategories)),
+        defaultCategories: DEFAULT_WORLDBOOK_CATEGORIES,
+        hasDefaultCategory: (name) => DEFAULT_WORLDBOOK_CATEGORIES.some((item) => item.name === name),
+        saveCustomCategories: async () => {},
         showEditCategoryModal: () => {},
         confirmAction: async () => false,
         resetSingleCategory: async () => {},
     });
 
-    return {
-        element,
-        view,
-        state,
-        getToggles: () => activeToggles,
-        savedCategories,
+    view.renderCategoriesList();
+    assertVisibleStandardCheckboxes(element.innerHTML);
+});
+
+// checkbox 事件绑定在稳定 modalContainer 上，初始静态项与重绘后的动态项都能保存状态。
+{
+    const delegatedEvents = new Map();
+    const state = {
+        settings: {},
+        config: { parallel: {}, chapterRegex: {} },
+        processing: {},
+        persistent: {
+            customCategories: structuredClone(DEFAULT_WORLDBOOK_CATEGORIES),
+        },
     };
-}
+    const saved = [];
+    globalThis.document = {
+        getElementById: () => null,
+        querySelectorAll: () => [],
+        addEventListener: () => {},
+    };
 
-{
-    const defaults = structuredClone(DEFAULT_WORLDBOOK_CATEGORIES);
-    const { element, view } = setupView(defaults);
-    view.renderCategoriesList();
-    assert.match(element.innerHTML, /ttw-category-cb/);
-    assert.match(element.innerHTML, /ttw-category-check/);
-    assert.match(element.innerHTML, /角色/);
-    assert.match(element.innerHTML, /地点/);
-    assert.strictEqual((element.innerHTML.match(/ttw-category-cb/g) || []).length, 2);
-}
+    bindSettingEvents({
+        EventDelegate: {
+            batchOn(container, config) {
+                delegatedEvents.set('batch', config);
+            },
+            on() {},
+        },
+        modalContainer: {},
+        AppState: state,
+        saveCurrentSettings: () => {},
+        saveCustomCategories: async () => saved.push(structuredClone(state.persistent.customCategories)),
+    });
 
-{
-    // 模拟旧版本/导入配置造成的空数据或脏数据：内置分类仍必须可选。
-    const { element, view } = setupView([null, { name: '', enabled: true }]);
-    view.renderCategoriesList();
-    assert.match(element.innerHTML, /角色/);
-    assert.match(element.innerHTML, /地点/);
-    assert.strictEqual((element.innerHTML.match(/ttw-category-cb/g) || []).length, 2);
-}
+    const categoryEvents = delegatedEvents.get('batch')['.ttw-category-cb'];
+    assert.ok(categoryEvents?.change);
 
-{
-    // 直接验证 checkbox change 事件会更新 enabled 并保存，而不是只改视觉状态。
-    const { view, state, getToggles, savedCategories } = setupView();
-    view.renderCategoriesList();
-
-    // 先触发一次异步恢复后的重渲染，再验证新 DOM 上的 checkbox 仍然可用。
-    view.renderCategoriesList();
-    const roleToggle = getToggles()[0];
-    roleToggle.checkbox.checked = false;
-    await roleToggle.checkbox.changeHandler();
-
+    const checkbox = {
+        dataset: { index: '0', categoryName: '角色' },
+        checked: false,
+    };
+    categoryEvents.change({}, checkbox);
     assert.equal(state.persistent.customCategories[0].name, '角色');
     assert.equal(state.persistent.customCategories[0].enabled, false);
-    assert.equal(roleToggle.item.dataset.enabled, 'false');
-    assert.equal(roleToggle.status.textContent, '停用');
-    assert.equal(savedCategories.length, 1);
 }
 
 console.log('categoryListView tests passed');

@@ -546,6 +546,22 @@ export function bindSettingEvents(deps = {}) {
     };
 
     EventDelegate.batchOn(modalContainer, {
+        '.ttw-category-cb': {
+            change: async (e, checkbox) => {
+                const index = parseInt(checkbox.dataset.index, 10);
+                const categoryName = checkbox.dataset.categoryName;
+                const categories = Array.isArray(AppState?.persistent?.customCategories)
+                    ? AppState.persistent.customCategories
+                    : [];
+                const category = categories[index]?.name === categoryName
+                    ? categories[index]
+                    : categories.find((item) => item?.name === categoryName);
+                if (!category) return;
+
+                category.enabled = checkbox.checked;
+                await saveCustomCategories();
+            },
+        },
         '#ttw-use-tavern-api': { change: () => { handleUseTavernApiChange(); saveCurrentSettings(); } },
         '#ttw-api-provider': { change: () => { handleProviderChange('main'); saveCurrentSettings(); } },
         '#ttw-api-provider-main': { change: () => { handleProviderChange('main'); saveCurrentSettings(); } },

@@ -1487,7 +1487,6 @@
         }
         
         .ttw-category-item {
-            position: relative;
             display: inline-flex;
             align-items: center;
             gap: 8px;
@@ -1498,12 +1497,6 @@
             border: 1px solid var(--ttw-border-color);
             transition: all 0.2s ease;
             cursor: pointer;
-            user-select: none;
-        }
-
-        .ttw-category-item.ttw-category-enabled {
-            border-color: rgba(52, 152, 219, 0.65);
-            background: rgba(52, 152, 219, 0.12);
         }
 
         .ttw-category-item:hover {
@@ -1511,60 +1504,24 @@
         }
 
         .ttw-category-item input[type="checkbox"] {
-            position: absolute;
-            left: 10px;
-            top: 50%;
-            width: 22px;
-            height: 22px;
+            width: 20px;
+            height: 20px;
             margin: 0;
-            transform: translateY(-50%);
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .ttw-category-check {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
             flex-shrink: 0;
-            width: 22px;
-            height: 22px;
-            border: 2px solid var(--ttw-border-color);
-            border-radius: 6px;
-            background: rgba(0, 0, 0, 0.28);
-            color: #fff;
-            font-size: 13px;
-            line-height: 1;
-            transition: all 0.2s ease;
+            accent-color: var(--ttw-accent-blue);
+            cursor: pointer;
         }
 
-        .ttw-category-cb:checked + .ttw-category-check {
-            border-color: var(--ttw-accent-blue);
-            background: var(--ttw-accent-blue);
-        }
-
-        .ttw-category-cb:focus-visible + .ttw-category-check {
-            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.28);
-        }
-
-        .ttw-category-name {
+        .ttw-category-name,
+        .ttw-checkbox-label.ttw-category-item span:first-of-type {
             font-size: 13px;
             color: var(--ttw-text-primary);
-        }
-
-        .ttw-category-status {
-            font-size: 11px;
-            color: var(--ttw-text-secondary);
-        }
-
-        .ttw-category-enabled .ttw-category-status {
-            color: var(--ttw-accent-blue);
         }
 
         .ttw-category-actions {
             display: none;
         }
-        
+
         /* --- 默认条目列表 --- */
         .ttw-default-entries-list {
             max-height: 200px;

@@ -158,16 +158,14 @@ export function createListRenderer(deps = {}) {
             };
             const icon = iconMap[cat.name] || '🏷️';
             return `
-                <label class="ttw-category-item ${enabled ? 'ttw-category-enabled' : ''}" data-index="${index}" data-enabled="${enabled}" title="点击切换是否提取：${this.escapeAttribute(cat.name)}">
-                    <input type="checkbox" class="ttw-category-cb" data-index="${index}" aria-label="提取分类：${this.escapeAttribute(cat.name)}" ${enabled ? 'checked' : ''}>
-                    <span class="ttw-category-check" aria-hidden="true">${enabled ? '✓' : ''}</span>
-                    <span class="ttw-category-name">${icon} ${this.escapeHtml(cat.name)}${cat.isBuiltin ? ' <span style="color:var(--ttw-text-muted);font-size:10px;">(内置)</span>' : ''}</span>
-                    <span class="ttw-category-status">${enabled ? '启用' : '停用'}</span>
-                    <div class="ttw-category-actions">
+                <label class="ttw-checkbox-label ttw-category-item" title="${this.escapeAttribute(cat.name)}">
+                    <input type="checkbox" class="ttw-category-cb" data-index="${index}" data-category-name="${this.escapeAttribute(cat.name)}" ${enabled ? 'checked' : ''}>
+                    <span>${icon} ${this.escapeHtml(cat.name)}${cat.isBuiltin ? ' <span style="color:var(--ttw-text-muted);font-size:10px;">(内置)</span>' : ''}</span>
+                    <span class="ttw-category-actions">
                         <button type="button" class="ttw-btn-tiny ttw-edit-cat" data-index="${index}" title="编辑">✏️</button>
                         <button type="button" class="ttw-btn-tiny ttw-reset-single-cat" data-index="${index}" title="重置此项" ${hasDefault ? '' : 'style="opacity:0.3;" disabled'}>🔄</button>
                         <button type="button" class="ttw-btn-tiny ttw-delete-cat" data-index="${index}" title="删除" ${cat.isBuiltin ? 'disabled style="opacity:0.3;"' : ''}>🗑️</button>
-                    </div>
+                    </span>
                 </label>`;
         },
 

@@ -87,7 +87,7 @@ ${buildApiConfigCard('director', '🎬 导演AI配置')}
     </div>`;
 }
 
-const PLUGIN_VERSION = 'A1.6';
+const PLUGIN_VERSION = 'A1.8';
 
 function buildPluginUpdateHtml() {
     return '';
@@ -384,14 +384,33 @@ function buildCategoryGuidePromptSectionHtml() {
     </div>`;
 }
 
+function buildStaticCategoryCheckboxesHtml() {
+    const iconMap = {
+        '角色': '👤',
+        '地点': '📍',
+        '组织': '🏛️',
+        '道具': '⚔️',
+        '章节剧情': '📜',
+    };
+    return DEFAULT_WORLDBOOK_CATEGORIES.map((category, index) => {
+        const enabled = category.enabled !== false;
+        const icon = iconMap[category.name] || '🏷️';
+        return `
+        <label class="ttw-checkbox-label ttw-category-item" title="${escapeAttribute(category.name)}">
+            <input type="checkbox" class="ttw-category-cb" data-index="${index}" data-category-name="${escapeAttribute(category.name)}" ${enabled ? 'checked' : ''}>
+            <span>${icon} ${escapeHtml(category.name)}${category.isBuiltin ? ' <span style="color:var(--ttw-text-muted);font-size:10px;">(内置)</span>' : ''}</span>
+        </label>`;
+    }).join('');
+}
+
 function buildCategoriesSectionHtml() {
     return `
     <div class="ttw-category-flat-card">
         <div class="ttw-category-flat-header">
             <span>🏷️ 提取分类</span>
         </div>
-        <div class="ttw-setting-hint" style="margin-bottom:8px;">勾选的分类会在解析 TXT 时被提取；内置提供 👤 角色、📍 地点。</div>
-        <div id="ttw-categories-list" class="ttw-categories-list" aria-live="polite"></div>
+        <div class="ttw-setting-hint" style="margin-bottom:8px;">勾选的分类会在解析 TXT 时被提取。</div>
+        <div id="ttw-categories-list" class="ttw-categories-list">${buildStaticCategoryCheckboxesHtml()}</div>
     </div>`;
 }
 

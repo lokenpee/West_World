@@ -65,31 +65,6 @@ export function createCategoryListView(deps = {}) {
 
         ListRenderer.updateContainer(listContainer, html);
 
-        // 直接绑定到本次渲染出的 checkbox，避免宿主 CSS/主题影响事件委托时无法勾选。
-        // 注意：每次 render 都会重建 DOM，所以这个绑定必须放在 eventsBound 早退之前。
-        listContainer.querySelectorAll('.ttw-category-cb').forEach((checkbox) => {
-            if (checkbox.dataset.changeBound === 'true') return;
-            checkbox.dataset.changeBound = 'true';
-            checkbox.addEventListener('change', async () => {
-                const index = parseInt(checkbox.dataset.index, 10);
-                const category = AppState.persistent.customCategories[index];
-                if (!category) return;
-
-                category.enabled = checkbox.checked;
-                const item = checkbox.closest('.ttw-category-item');
-                if (item) {
-                    item.classList.toggle('ttw-category-enabled', category.enabled);
-                    item.dataset.enabled = String(category.enabled);
-                    const status = item.querySelector('.ttw-category-status');
-                    if (status) status.textContent = category.enabled ? '启用' : '停用';
-                }
-                const customCheck = checkbox.nextElementSibling;
-                if (customCheck) customCheck.textContent = category.enabled ? '✓' : '';
-
-                await saveCustomCategories();
-            });
-        });
-
         if (listContainer.dataset.eventsBound === 'true') return;
 
         EventDelegate.on(listContainer, '.ttw-edit-cat', 'click', (e, btn) => {
