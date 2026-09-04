@@ -1,4 +1,4 @@
-export function ensureModalStyles() {
+﻿export function ensureModalStyles() {
     if (document.getElementById('ttw-styles')) return;
     const styles = document.createElement('style');
     styles.id = 'ttw-styles';
@@ -1487,9 +1487,10 @@ export function ensureModalStyles() {
         }
         
         .ttw-category-item {
+            position: relative;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             margin: 0;
             padding: 8px 10px;
             background: var(--ttw-bg-dark);
@@ -1497,24 +1498,69 @@ export function ensureModalStyles() {
             border: 1px solid var(--ttw-border-color);
             transition: all 0.2s ease;
             cursor: pointer;
+            user-select: none;
         }
-        
+
+        .ttw-category-item.ttw-category-enabled {
+            border-color: rgba(52, 152, 219, 0.65);
+            background: rgba(52, 152, 219, 0.12);
+        }
+
         .ttw-category-item:hover {
             background: var(--ttw-bg-light);
         }
-        
+
         .ttw-category-item input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            width: 22px;
+            height: 22px;
             margin: 0;
-            accent-color: var(--ttw-accent-blue);
+            transform: translateY(-50%);
+            opacity: 0;
+            pointer-events: none;
         }
-        
+
+        .ttw-category-check {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--ttw-border-color);
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.28);
+            color: #fff;
+            font-size: 13px;
+            line-height: 1;
+            transition: all 0.2s ease;
+        }
+
+        .ttw-category-cb:checked + .ttw-category-check {
+            border-color: var(--ttw-accent-blue);
+            background: var(--ttw-accent-blue);
+        }
+
+        .ttw-category-cb:focus-visible + .ttw-category-check {
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.28);
+        }
+
         .ttw-category-name {
             font-size: 13px;
             color: var(--ttw-text-primary);
         }
-        
+
+        .ttw-category-status {
+            font-size: 11px;
+            color: var(--ttw-text-secondary);
+        }
+
+        .ttw-category-enabled .ttw-category-status {
+            color: var(--ttw-accent-blue);
+        }
+
         .ttw-category-actions {
             display: none;
         }

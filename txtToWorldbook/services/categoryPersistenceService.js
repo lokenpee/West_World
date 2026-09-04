@@ -71,6 +71,7 @@ export function createCategoryPersistenceService(deps) {
             const defaultGuide = (defaultCategory?.contentGuide || '').trim();
             synced.push({
                 ...saved,
+                enabled: saved.enabled === undefined ? !!defaultCategory.enabled : !!saved.enabled,
                 isBuiltin: !!defaultCategory.isBuiltin,
                 entryExample: defaultCategory.entryExample,
                 keywordsExample: clone(defaultCategory.keywordsExample || []),
