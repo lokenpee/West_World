@@ -134,7 +134,6 @@ export function bindExportEvents(deps = {}) {
         AppState,
         showPromptPreview,
         showPlotOutlineConfigModal,
-        showBatchDeleteRepeatedSegmentsModal,
         importAndMergeWorldbook,
         importAndMergeCharacterCard,
         restoreTaskSnapshot,
@@ -159,10 +158,7 @@ export function bindExportEvents(deps = {}) {
     if (restoreSnapshotBtn && typeof restoreTaskSnapshot === 'function') {
         restoreSnapshotBtn.addEventListener('click', restoreTaskSnapshot);
     }
-    const cleanRepeatBtn = document.getElementById('ttw-clean-repeat-segments');
-    if (cleanRepeatBtn && typeof showBatchDeleteRepeatedSegmentsModal === 'function') {
-        cleanRepeatBtn.addEventListener('click', showBatchDeleteRepeatedSegmentsModal);
-    }
+
     document.getElementById('ttw-import-task').addEventListener('click', loadTaskState);
     document.getElementById('ttw-export-task').addEventListener('click', saveTaskState);
     document.getElementById('ttw-export-settings').addEventListener('click', exportSettings);
@@ -259,7 +255,6 @@ export function bindFileEvents(deps = {}) {
     const cleanResultWrap = document.getElementById('ttw-inline-clean-repeat-results');
     const cleanSummary = document.getElementById('ttw-inline-clean-repeat-summary');
     const cleanDetails = document.getElementById('ttw-inline-clean-repeat-details');
-    const rangeEls = document.querySelectorAll('input[name="ttw-inline-clean-repeat-range"]');
 
     if (!cleanInput || !cleanPreviewBtn || !cleanExecBtn || !cleanResultWrap || !cleanSummary || !cleanDetails) {
         return;
@@ -314,10 +309,6 @@ export function bindFileEvents(deps = {}) {
         return unique;
     };
 
-    const getRangeMode = () => {
-        const selected = document.querySelector('input[name="ttw-inline-clean-repeat-range"]:checked');
-        return selected ? selected.value : 'all';
-    };
 
     const renderPreviewResult = (preview) => {
         cleanResultWrap.style.display = 'block';
@@ -387,9 +378,6 @@ export function bindFileEvents(deps = {}) {
         markPreviewDirty();
     });
 
-    rangeEls.forEach((el) => {
-        el.addEventListener('change', markPreviewDirty);
-    });
 
     cleanPreviewBtn.addEventListener('click', () => {
         if (typeof previewRepeatedSegmentsCleanup !== 'function') {
@@ -397,8 +385,7 @@ export function bindFileEvents(deps = {}) {
             return;
         }
 
-        const rangeMode = getRangeMode();
-        const previewResult = previewRepeatedSegmentsCleanup(cleanInput.value || '', rangeMode, []);
+        const previewResult = previewRepeatedSegmentsCleanup(cleanInput.value || '','all', []);
         if (!previewResult || !previewResult.ok) {
             showError((previewResult && previewResult.error) || '预览失败');
             return;

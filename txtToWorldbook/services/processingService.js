@@ -465,15 +465,6 @@ export function createProcessingService(deps = {}) {
         if (!memory.directorDecision || typeof memory.directorDecision !== 'object') {
             memory.directorDecision = null;
         }
-        if (typeof memory.chapterOpeningPreview !== 'string') {
-            memory.chapterOpeningPreview = '';
-        }
-        if (typeof memory.chapterOpeningSent !== 'boolean') {
-            memory.chapterOpeningSent = false;
-        }
-        if (typeof memory.chapterOpeningError !== 'string') {
-            memory.chapterOpeningError = '';
-        }
     }
 
     function normalizeSelfCheck(rawValue, extraWarnings = []) {

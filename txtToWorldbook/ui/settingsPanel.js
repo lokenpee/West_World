@@ -542,14 +542,9 @@ function buildInlineRepeatCleanupHtml() {
         </div>
         <textarea id="ttw-inline-clean-repeat-input" rows="5" class="ttw-textarea-small" placeholder="例如：\n（月影霜华 作者:江东孙伯父）\n\n本章完\n\n请收藏本站..."></textarea>
         <div id="ttw-inline-clean-repeat-hint" class="ttw-setting-hint" style="margin-top:6px;">尚未解析片段</div>
-        <div class="ttw-clean-repeat-inline-range">
-            <label><input type="radio" name="ttw-inline-clean-repeat-range" value="all" checked> 全部章节</label>
-            <label><input type="radio" name="ttw-inline-clean-repeat-range" value="unprocessed"> 仅未处理章节</label>
-        </div>
         <div class="ttw-clean-repeat-inline-actions">
             <button id="ttw-inline-clean-repeat-preview" class="ttw-btn ttw-btn-small">🔍 预览命中</button>
             <button id="ttw-inline-clean-repeat-execute" class="ttw-btn ttw-btn-small ttw-btn-warning" disabled>🧹 执行删除</button>
-            <button id="ttw-clean-repeat-segments" class="ttw-btn-small" title="打开高级模式（支持章节自定义范围）">⚙️ 高级模式</button>
         </div>
         <div id="ttw-inline-clean-repeat-results" class="ttw-clean-repeat-inline-results" style="display:none;">
             <div id="ttw-inline-clean-repeat-summary" style="margin-bottom:8px;"></div>
@@ -572,7 +567,7 @@ function buildFileUploadSectionHtml() {
             </div>
         </div>
         <div class="ttw-section-content">
-            <div class="ttw-setting-hint" style="margin-bottom:8px;">💾 工程包会保存：章节队列、故事大纲、当前章节开场白状态、世界书与处理进度。</div>
+            <div class="ttw-setting-hint" style="margin-bottom:8px;">💾 工程包会保存：章节队列、故事大纲、当前章节开头展示状态、世界书与处理进度。</div>
             <div class="ttw-upload-area" id="ttw-upload-area">
                 <div style="font-size:48px;margin-bottom:12px;">📁</div>
                 <div style="font-size:14px;opacity:0.8;">点击或拖拽TXT文件到此处</div>
@@ -698,8 +693,8 @@ function buildResultSectionHtml() {
                 </div>
 
                 <div class="ttw-current-block">
-                    <div class="ttw-current-block-title">本章开场白</div>
-                    <div id="ttw-current-opening" class="ttw-current-block-content">暂无开场白</div>
+                    <div class="ttw-current-block-title">章节开头（原文展示）</div>
+                    <div id="ttw-current-opening" class="ttw-current-block-content">暂无章节开头内容</div>
                 </div>
             </div>
 

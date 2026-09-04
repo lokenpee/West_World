@@ -219,9 +219,6 @@ export function createFileImportService(deps = {}) {
             if (!Array.isArray(memory.chapterScript.beats)) {
                 memory.chapterScript.beats = [];
             }
-            memory.chapterOpeningPreview = memory.chapterOpeningPreview || '';
-            memory.chapterOpeningSent = memory.chapterOpeningSent === true;
-            memory.chapterOpeningError = memory.chapterOpeningError || '';
         });
     }
 
@@ -324,9 +321,6 @@ export function createFileImportService(deps = {}) {
             chapterOutlineStatus: 'pending',
             chapterOutlineError: '',
             chapterScript: { keyNodes: [], beats: [] },
-            chapterOpeningPreview: '',
-            chapterOpeningSent: false,
-            chapterOpeningError: '',
         };
     }
 

@@ -1,11 +1,10 @@
 import { normalizeChapterSplitRule } from '../../src/domain/chapter/splitTypes.js';
+import { extractChapterOpening } from '../../src/domain/chapter/chapterOpening.js';
 
 export function createChapterExperienceView(deps = {}) {
     const {
         AppState,
         ErrorHandler,
-        callAPI,
-        getLanguagePrefix,
         ModalFactory,
         MemoryHistoryDB,
         retryChapterOutline,
@@ -253,18 +252,6 @@ export function createChapterExperienceView(deps = {}) {
         if (!Number.isInteger(memory.chapterCurrentBeatIndex)) {
             memory.chapterCurrentBeatIndex = 0;
         }
-        if (typeof memory.chapterOpeningPreview !== 'string') {
-            memory.chapterOpeningPreview = '';
-        }
-        if (typeof memory.chapterOpeningSent !== 'boolean') {
-            memory.chapterOpeningSent = false;
-        }
-        if (typeof memory.chapterOpeningError !== 'string') {
-            memory.chapterOpeningError = '';
-        }
-        if (typeof memory.chapterOpeningGenerating !== 'boolean') {
-            memory.chapterOpeningGenerating = false;
-        }
     }
 
     function toShortText(text, maxLen = 180) {
@@ -492,7 +479,7 @@ export function createChapterExperienceView(deps = {}) {
     function buildEditorBodyHtml(draft) {
         return `
 <div class="ttw-chapter-editor-modal">
-    <div class="ttw-chapter-editor-tip">本次仅编辑摘要与小剧场节拍字段；开场白仍由章节切换逻辑自动生成。</div>
+    <div class="ttw-chapter-editor-tip">本次仅编辑摘要与小剧场节拍字段；章节进入时会展示原文开头。</div>
     <div class="ttw-chapter-editor-grid">
         <label class="ttw-editor-field">
             <span class="ttw-editor-field-label">故事摘要</span>
@@ -1090,7 +1077,7 @@ ${buildDebugPreBlock('4. 最终注入到演员 AI 的提示词', entry.actorInje
             if (titleEl) titleEl.textContent = '当前章节概览';
             if (summaryEl) summaryEl.textContent = '暂无章节数据';
             if (scriptEl) scriptEl.innerHTML = '<div class="ttw-script-empty">暂无剧本数据</div>';
-            if (openingEl) openingEl.textContent = '暂无开场白';
+            if (openingEl) openingEl.textContent = '暂无章节开头内容';
             if (hintEl) hintEl.textContent = '暂无章节数据';
             if (prevBeatBtn) prevBeatBtn.disabled = true;
             if (nextBeatBtn) nextBeatBtn.disabled = true;
@@ -1119,18 +1106,11 @@ ${buildDebugPreBlock('4. 最终注入到演员 AI 的提示词', entry.actorInje
         if (summaryEl) summaryEl.textContent = outline;
         if (scriptEl) scriptEl.innerHTML = buildScriptHtml(memory);
 
-        if (memory.chapterOpeningGenerating) {
-            if (openingEl) openingEl.textContent = '正在生成开场白...';
-        } else if (memory.chapterOpeningPreview) {
-            if (openingEl) openingEl.textContent = memory.chapterOpeningPreview;
-        } else if (memory.chapterOpeningError) {
-            if (openingEl) openingEl.textContent = `开场白生成失败：${memory.chapterOpeningError}`;
-        } else {
-            if (openingEl) {
-                openingEl.textContent = idx === 0
-                    ? '点击“开始阅读第一章”后将自动生成并发送开场白。'
-                    : '该章开场白会在你从上一章点击“下一章”进入时生成并发送。';
-            }
+        const chapterOpening = chapterEntryNotice.index === idx
+            ? chapterEntryNotice.text
+            : extractChapterOpening(memory.content, 2);
+        if (openingEl) {
+            openingEl.textContent = chapterOpening || '暂无章节开头内容';
         }
 
         const isLast = idx >= AppState.memory.queue.length - 1;
@@ -1151,268 +1131,79 @@ ${buildDebugPreBlock('4. 最终注入到演员 AI 的提示词', entry.actorInje
         }
     }
 
-    function toHeadSnippet(text, maxLen = 100) {
-        const plain = String(text || '').replace(/\s+/g, ' ').trim();
-        if (!plain) return '';
-        return plain.slice(0, maxLen).trim();
-    }
+    const CHAPTER_ENTERED_EVENT = 'WESTWORLD_CHAPTER_ENTERED';
+    let chapterEntryNotice = { index: -1, text: '' };
+    let chapterEntryListenerBound = false;
+    let lastAnnouncedChapterIndex = null;
 
-    function toTailSnippet(text, maxLen = 100) {
-        const plain = String(text || '').replace(/\s+/g, ' ').trim();
-        if (!plain) return '';
-        if (plain.length <= maxLen) return plain;
-        return plain.slice(Math.max(0, plain.length - maxLen)).trim();
-    }
-
-    function getFirstBeatLeadSnippet(memory, maxLen = 100) {
-        const beats = Array.isArray(memory?.chapterScript?.beats) ? memory.chapterScript.beats : [];
-        const firstBeat = beats[0] && typeof beats[0] === 'object' ? beats[0] : null;
-        if (!firstBeat) return '';
-
-        const firstBeatText = String(
-            firstBeat.original_text
-            || firstBeat.originalText
-            || firstBeat.event_summary
-            || firstBeat.eventSummary
-            || firstBeat.summary
-            || ''
-        ).trim();
-        return toHeadSnippet(firstBeatText, maxLen);
-    }
-
-    function buildCurrentChapterLeadSnippet(memory, maxLen = 100) {
-        const beatLead = getFirstBeatLeadSnippet(memory, maxLen);
-        if (beatLead) return beatLead;
-
-        const contentLead = toHeadSnippet(memory?.content || '', maxLen);
-        if (contentLead) return contentLead;
-
-        return toHeadSnippet(memory?.chapterOutline || '', maxLen);
-    }
-
-    function collectLatestAssistantTail(maxLen = 100) {
+    function getEventSource() {
         try {
-            const st = typeof SillyTavern !== 'undefined' ? SillyTavern : null;
-            if (!st || typeof st.getContext !== 'function') return '';
-            const context = st.getContext();
-            const chat = Array.isArray(context?.chat) ? context.chat : [];
-            if (chat.length === 0) return '';
-
-            for (let i = chat.length - 1; i >= 0; i--) {
-                const item = chat[i];
-                const text = String(item?.mes || item?.content || '').trim();
-                if (!text) continue;
-                if (item?.is_user) continue;
-                return toTailSnippet(text, maxLen);
-            }
-            return '';
+            return globalThis.SillyTavern?.getContext?.()?.eventSource || null;
         } catch (_) {
-            return '';
+            return null;
         }
     }
 
-    function resolveOpeningAnchors(memory, index) {
-        const assistantTail = collectLatestAssistantTail(100);
-        const currentLead = buildCurrentChapterLeadSnippet(memory, 100);
-
-        if (assistantTail) {
-            return {
-                carryOver: assistantTail,
-                carrySource: 'latest-assistant-tail',
-                leadIn: currentLead,
-            };
-        }
-
-        if (index === 0) {
-            return {
-                carryOver: currentLead,
-                carrySource: 'chapter1-current-head',
-                leadIn: currentLead,
-            };
-        }
-
-        return {
-            carryOver: '',
-            carrySource: 'none',
-            leadIn: currentLead,
-        };
-    }
-
-    function buildChapterLeadSnippet(memory, minLen = 50, maxLen = 100) {
-        const plain = String(buildCurrentChapterLeadSnippet(memory, maxLen) || '').replace(/\s+/g, ' ').trim();
-        if (!plain) return '';
-
-        let snippet = plain.slice(0, maxLen);
-        const punctIndex = snippet.search(/[。！？!?]/);
-        if (punctIndex >= minLen - 1) {
-            snippet = snippet.slice(0, punctIndex + 1);
-        }
-        if (snippet.length < minLen && plain.length > snippet.length) {
-            snippet = plain.slice(0, Math.min(maxLen, Math.max(minLen, plain.length)));
-        }
-        return snippet.trim();
-    }
-
-    function trimOpeningText(text, minLen = 50, maxLen = 200) {
-        let normalized = String(text || '').replace(/\s+/g, ' ').trim();
-        if (!normalized) return '';
-
-        if (normalized.length > maxLen) {
-            const sliced = normalized.slice(0, maxLen);
-            const boundary = Math.max(
-                sliced.lastIndexOf('。'),
-                sliced.lastIndexOf('！'),
-                sliced.lastIndexOf('？'),
-                sliced.lastIndexOf('!'),
-                sliced.lastIndexOf('?')
-            );
-            normalized = boundary >= minLen - 1 ? sliced.slice(0, boundary + 1) : sliced;
-        }
-
-        return normalized;
-    }
-
-    function buildOpeningFallback(memory, index) {
-        const title = memory.chapterTitle || `第${index + 1}章`;
-        const chapterSummaryLead = toHeadSnippet(memory?.chapterOutline || '', 36);
-        const { carryOver, leadIn } = resolveOpeningAnchors(memory, index);
-        const carryPart = carryOver || `${title}${chapterSummaryLead ? `，${chapterSummaryLead}` : ''}`;
-        const leadPart = leadIn || buildChapterLeadSnippet(memory, 50, 100) || '你收拢思绪，准备接住眼前即将展开的变化。';
-        const carryWithPunc = /[。！？!?]$/.test(carryPart) ? carryPart : `${carryPart}。`;
-        const fallback = `${carryWithPunc}${leadPart}`;
-        return trimOpeningText(fallback, 50, 200);
-    }
-
-    function sanitizeOpeningText(raw, memory, index) {
-        const text = trimOpeningText(String(raw || '')
-            .replace(/^```[a-z]*\s*/i, '')
-            .replace(/\s*```$/i, '')
-            .trim(), 50, 200);
-        if (!text) {
-            return buildOpeningFallback(memory, index);
-        }
-        return text;
-    }
-
-    async function generateOpeningText(memory, index) {
-        const chapterTitle = memory.chapterTitle || `第${index + 1}章`;
-        const chapterSummary = toHeadSnippet(memory?.chapterOutline || '', 48) || '无';
-        const { carryOver, carrySource, leadIn } = resolveOpeningAnchors(memory, index);
-        const carryText = carryOver || '无可用AI尾部承接（非首章且聊天中暂无AI输出）';
-        const leadText = leadIn || buildChapterLeadSnippet(memory, 50, 100) || '本章开头素材缺失';
-
-        const prompt = `${getLanguagePrefix()}你是互动小说旁白。请生成“承上启下型开场白”。
-
-硬性要求：
-1) 仅输出 100 字以内中文，不要解释规则，不要输出JSON，不要分点。
-2) 只能用于衔接上文并引入本章，不要推进剧情。
-3) 先承上，再启下：承上必须参考“承上素材（尾部截断）”；启下必须参考“启下素材（头部截断）”。
-4) 不得泄露本章后续目标、流程、关键节点、核心冲突、转折或结局。
-
-当前章节：${chapterTitle}
-当前章节摘要（参考）：${chapterSummary}
-承上来源：${carrySource}
-承上素材（尾部截断100字）：${carryText}
-启下素材（头部截断100字）：${leadText}
-
-请直接输出开场白正文：`;
-
-        const response = await callAPI(prompt, index + 1);
-        return sanitizeOpeningText(response, memory, index);
-    }
-
-    async function pushOpeningMessage(text, index) {
-        const st = typeof SillyTavern !== 'undefined' ? SillyTavern : null;
-        if (!st || typeof st.getContext !== 'function') {
-            throw new Error('无法访问SillyTavern上下文');
-        }
-
-        const context = st.getContext();
-        if (!context || !Array.isArray(context.chat)) {
-            throw new Error('当前聊天上下文不可用');
-        }
-
-        const openingMessage = {
-            is_user: false,
-            mes: text,
-            _westworld_auto_opening: true,
-            _westworld_chapter: index + 1,
-            _storyweaver_auto_opening: true,
-            _storyweaver_chapter: index + 1,
-            _generatedAt: Date.now(),
-        };
-
-        if (typeof context.addOneMessage === 'function') {
-            await context.addOneMessage(openingMessage);
-            return;
-        }
-
-        context.chat.push(openingMessage);
-
-        if (typeof context.saveChat === 'function') {
-            await context.saveChat();
-        }
-        if (typeof context.reloadCurrentChat === 'function') {
-            await context.reloadCurrentChat();
-        } else if (typeof context.renderChat === 'function') {
-            context.renderChat();
-        }
-    }
-
-    async function ensureOpeningForChapter(index) {
+    function handleChapterEntered(eventData = {}) {
+        const index = Number.isInteger(eventData.chapterIndex)
+            ? eventData.chapterIndex
+            : Number.parseInt(eventData.chapterIndex, 10);
         const memory = getMemory(index);
         if (!memory) return;
-        ensureMemoryRuntime(memory, index);
-        if (memory.chapterOpeningSent || memory.chapterOpeningGenerating) {
+
+        chapterEntryNotice = {
+            index,
+            text: extractChapterOpening(memory.content, 2),
+        };
+        renderCurrentPanel();
+    }
+
+    function bindChapterEntryEvents() {
+        if (chapterEntryListenerBound) return;
+        const source = getEventSource();
+        if (!source || typeof source.on !== 'function') return;
+        source.on(CHAPTER_ENTERED_EVENT, handleChapterEntered);
+        chapterEntryListenerBound = true;
+    }
+
+    async function announceChapterEntry(index, reason = 'chapter-navigation') {
+        bindChapterEntryEvents();
+        if (lastAnnouncedChapterIndex === index) {
+            if (chapterEntryNotice.index !== index) {
+                handleChapterEntered({ chapterIndex: index, reason });
+            }
             return;
         }
 
-        memory.chapterOpeningGenerating = true;
-        memory.chapterOpeningError = '';
-        renderCurrentPanel();
-
-        try {
-            const opening = await generateOpeningText(memory, index);
-            memory.chapterOpeningPreview = opening;
-
-            try {
-                await pushOpeningMessage(opening, index);
-                memory.chapterOpeningSent = true;
-            } catch (sendError) {
-                memory.chapterOpeningSent = false;
-                memory.chapterOpeningError = String(sendError?.message || '发送失败');
-                ErrorHandler.showUserError(`开场白发送失败：${memory.chapterOpeningError}`);
-            }
-        } catch (error) {
-            const fallback = buildOpeningFallback(memory, index);
-            memory.chapterOpeningPreview = fallback;
-            try {
-                await pushOpeningMessage(fallback, index);
-                memory.chapterOpeningSent = true;
-                memory.chapterOpeningError = '开场白生成失败，已使用安全降级文案发送。';
-            } catch (sendError) {
-                memory.chapterOpeningSent = false;
-                memory.chapterOpeningError = String(sendError?.message || error?.message || '开场白生成失败');
-                ErrorHandler.showUserError(`开场白生成失败：${memory.chapterOpeningError}`);
-            }
-        } finally {
-            memory.chapterOpeningGenerating = false;
-            renderCurrentPanel();
+        lastAnnouncedChapterIndex = index;
+        const source = getEventSource();
+        const payload = {
+            chapterIndex: index,
+            reason,
+            at: Date.now(),
+        };
+        if (source && typeof source.emit === 'function') {
+            await source.emit(CHAPTER_ENTERED_EVENT, payload);
+            return;
         }
+        handleChapterEntered(payload);
     }
 
     async function enterChapter(index, options = {}) {
-        const { triggerOpening = true } = options;
+        const { announce = true } = options;
         if (index < 0 || index >= AppState.memory.queue.length) return;
         ensureState();
         AppState.experience.currentChapterIndex = index;
         renderCurrentPanel();
-        if (triggerOpening) {
-            await ensureOpeningForChapter(index);
+        if (announce) {
+            await announceChapterEntry(index);
         }
     }
 
     async function showCurrentChapterPanelInternal() {
+        ensureState();
+        const currentIndex = Math.max(0, Math.min(AppState.experience.currentChapterIndex || 0, Math.max(0, AppState.memory.queue.length - 1)));
+        await announceChapterEntry(currentIndex, 'open-current-panel');
         persistLastModalView('current');
         setModeTabActive('current');
         setTxtSectionsVisible(false);
@@ -1490,12 +1281,8 @@ ${buildDebugPreBlock('4. 最终注入到演员 AI 的提示词', entry.actorInje
                 const memory = getMemory(index);
                 if (memory) {
                     ensureMemoryRuntime(memory, index);
-                    memory.chapterOpeningPreview = '';
-                    memory.chapterOpeningSent = false;
-                    memory.chapterOpeningError = '';
-                    memory.chapterOpeningGenerating = false;
                 }
-                ErrorHandler.showUserSuccess(`第${index + 1}章重roll成功（摘要/小剧本/开场白已重置）`);
+                ErrorHandler.showUserSuccess(`第${index + 1}章重roll成功（摘要/小剧本已重置）`);
             } catch (error) {
                 ErrorHandler.showUserError(`第${index + 1}章重roll失败：${error.message}`);
             }
@@ -1505,7 +1292,7 @@ ${buildDebugPreBlock('4. 最终注入到演员 AI 的提示词', entry.actorInje
         }
 
         if (action === 'view-chapter') {
-            await enterChapter(index, { triggerOpening: false });
+            await enterChapter(index);
             await showCurrentChapterPanelInternal();
             return;
         }
@@ -1664,6 +1451,7 @@ ${buildDebugPreBlock('4. 最终注入到演员 AI 的提示词', entry.actorInje
         bindOutlineEvents();
         bindCurrentEvents();
         bindDirectorDebugEvents();
+        bindChapterEntryEvents();
     }
 
     return {

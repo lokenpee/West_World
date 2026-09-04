@@ -938,7 +938,7 @@ export function createDirectorService(deps = {}) {
         return renderDirectorPromptFrame({ promptHead, promptBody, promptTail });
     }
 
-    function getLatestDialogue(eventData) {
+    function  getLatestDialogue(eventData) {
         return buildRecentDialogueContext(eventData) || '无最近对话';
     }
 

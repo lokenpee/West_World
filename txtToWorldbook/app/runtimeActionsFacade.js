@@ -46,12 +46,6 @@ export function createRuntimeActionsFacade(deps = {}) {
         replaceAndCleanService.showCleanTagsModal();
     }
 
-    function showBatchDeleteRepeatedSegmentsModal() {
-        if (!replaceAndCleanService) return;
-        if (typeof replaceAndCleanService.showBatchDeleteRepeatedSegmentsModal !== 'function') return;
-        replaceAndCleanService.showBatchDeleteRepeatedSegmentsModal();
-    }
-
     function previewRepeatedSegmentsCleanup(inputText, rangeMode = 'all', selectedIndices = []) {
         if (!replaceAndCleanService) {
             return { ok: false, error: '清洗服务未初始化' };
@@ -180,7 +174,6 @@ export function createRuntimeActionsFacade(deps = {}) {
 
     return {
         showCleanTagsModal,
-        showBatchDeleteRepeatedSegmentsModal,
         previewRepeatedSegmentsCleanup,
         executeRepeatedSegmentsCleanup,
         showEntryConfigModal,

@@ -101,9 +101,6 @@ export function createMemoryQueueActionsService(deps = {}) {
             chapterOutlineStatus: 'pending',
             chapterOutlineError: '',
             chapterScript: { keyNodes: [], beats: [] },
-            chapterOpeningPreview: '',
-            chapterOpeningSent: false,
-            chapterOpeningError: '',
         };
         const memory2 = {
             title: baseName + suffix2,
@@ -116,9 +113,6 @@ export function createMemoryQueueActionsService(deps = {}) {
             chapterOutlineStatus: 'pending',
             chapterOutlineError: '',
             chapterScript: { keyNodes: [], beats: [] },
-            chapterOpeningPreview: '',
-            chapterOpeningSent: false,
-            chapterOpeningError: '',
         };
         AppState.memory.queue.splice(memoryIndex, 1, memory1, memory2);
         return { part1: memory1, part2: memory2 };

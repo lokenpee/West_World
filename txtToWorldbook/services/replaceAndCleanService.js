@@ -413,22 +413,12 @@ tochao">thinking\ntucao\ntochao</textarea>
         return count;
     }
 
-    function getTargetChapterIndices(mode, selectedSet) {
-        const queue = Array.isArray(AppState.memory.queue) ? AppState.memory.queue : [];
-        const all = queue.map((_, idx) => idx);
-
-        if (mode === 'all') return all;
-        if (mode === 'unprocessed') {
-            return all.filter((idx) => {
-                const memory = queue[idx] || {};
-                return !(memory.processed && !memory.failed);
-            });
-        }
-
-        const selected = selectedSet instanceof Set
-            ? [...selectedSet].filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < queue.length)
+    function getTargetChapterIndices() {
+        const queue = Array.isArray(AppState.memory.queue)
+            ? AppState.memory.queue
             : [];
-        return selected.sort((a, b) => a - b);
+
+        return queue.map((_, index) => index);
     }
 
     function buildCleanupPreview(segments, chapterIndices) {
@@ -489,9 +479,6 @@ tochao">thinking\ntucao\ntochao</textarea>
         memory.chapterScript = { keyNodes: [], beats: [] };
         memory.chapterCurrentBeatIndex = 0;
         memory.directorDecision = null;
-        memory.chapterOpeningPreview = '';
-        memory.chapterOpeningSent = false;
-        memory.chapterOpeningError = '';
     }
 
     function applyRepeatedSegmentsCleanup(segments, chapterIndices) {
@@ -555,11 +542,7 @@ tochao">thinking\ntucao\ntochao</textarea>
     }
 
     function previewRepeatedSegmentsCleanup(options = {}) {
-        const {
-            inputText = '',
-            rangeMode = 'all',
-            selectedIndices = [],
-        } = options;
+        const { inputText = '' } = options;
 
         const segments = parseRepeatedSegments(inputText);
         if (segments.length === 0) {
@@ -572,17 +555,7 @@ tochao">thinking\ntucao\ntochao</textarea>
             };
         }
 
-        const selectedSet = selectedIndices instanceof Set
-            ? selectedIndices
-            : new Set(
-                Array.isArray(selectedIndices)
-                    ? selectedIndices
-                        .map((item) => Number.parseInt(item, 10))
-                        .filter((item) => Number.isInteger(item) && item >= 0)
-                    : [],
-            );
-
-        const chapterIndices = getTargetChapterIndices(rangeMode, selectedSet);
+        const chapterIndices = getTargetChapterIndices();
         if (chapterIndices.length === 0) {
             return {
                 ok: false,
@@ -597,7 +570,7 @@ tochao">thinking\ntucao\ntochao</textarea>
         return {
             ok: true,
             error: '',
-            rangeMode,
+            rangeMode: 'all',
             segments,
             chapterIndices,
             preview,
@@ -647,26 +620,7 @@ tochao">thinking\ntucao\ntochao</textarea>
         };
     }
 
-    function buildChapterCheckboxList(selectedIndices) {
-        const queue = Array.isArray(AppState.memory.queue) ? AppState.memory.queue : [];
-        return queue.map((memory, idx) => {
-            const checked = selectedIndices.has(idx) ? 'checked' : '';
-            const chapterTitle = escapeHtml(memory?.chapterTitle || `第${idx + 1}章`);
-            const memoryTitle = escapeHtml(memory?.title || `记忆${idx + 1}`);
-            const isProcessed = !!memory?.processed && !memory?.failed;
-            const status = isProcessed
-                ? '<span style="font-size:10px;color:#f39c12;">已处理</span>'
-                : '<span style="font-size:10px;color:#2ecc71;">未处理</span>';
 
-            return `
-                <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px dashed rgba(255,255,255,0.08);">
-                    <input type="checkbox" class="ttw-clean-repeat-chapter-cb" data-index="${idx}" ${checked}>
-                    <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${chapterTitle} · ${memoryTitle}</span>
-                    ${status}
-                </label>
-            `;
-        }).join('');
-    }
 
     function renderCleanupPreview(modal, preview) {
         const summary = modal.querySelector('#ttw-clean-repeat-summary');
@@ -944,7 +898,6 @@ tochao">thinking\ntucao\ntochao</textarea>
 
     return {
         showCleanTagsModal,
-        showBatchDeleteRepeatedSegmentsModal,
         previewRepeatedSegmentsCleanup,
         executeRepeatedSegmentsCleanup,
     };

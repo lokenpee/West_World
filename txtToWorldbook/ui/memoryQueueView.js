@@ -17,9 +17,6 @@ export function createMemoryQueueView(deps = {}) {
         memory.chapterOutlineStatus = 'pending';
         memory.chapterOutlineError = '';
         memory.chapterScript = { keyNodes: [], beats: [] };
-        memory.chapterOpeningPreview = '';
-        memory.chapterOpeningSent = false;
-        memory.chapterOpeningError = '';
     }
 
     function updateMemoryQueueUI() {

@@ -450,7 +450,6 @@ export const defaultSettings = {
     useCustomChapterRegex: false,
     enableChapterOutline: true,
     chapterOutlineMaxRetries: 1,
-    chapterOpeningTargetLength: '50-100',
     defaultWorldbookEntriesUI: [],
     categoryDefaultConfig: {},
     entryPositionConfig: {},
