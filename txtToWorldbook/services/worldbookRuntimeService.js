@@ -94,46 +94,7 @@ export function createWorldbookRuntimeService(deps = {}) {
                 mergeWorldbookDataIncremental(AppState.worldbook.generated, memory.result);
             }
         }
-        applyDefaultWorldbookEntries();
         updateStreamContent('\n📚 从已处理记忆重建了世界书\n');
-    }
-
-    function applyDefaultWorldbookEntries() {
-        if (AppState.persistent.defaultEntries && AppState.persistent.defaultEntries.length > 0) {
-            for (const entry of AppState.persistent.defaultEntries) {
-                if (!entry.category || !entry.name) continue;
-                if (!AppState.worldbook.generated[entry.category]) {
-                    AppState.worldbook.generated[entry.category] = {};
-                }
-                AppState.worldbook.generated[entry.category][entry.name] = {
-                    '关键词': entry.keywords || [],
-                    '内容': entry.content || '',
-                };
-
-                if (entry.position !== undefined || entry.depth !== undefined || entry.order !== undefined) {
-                    setEntryConfig(entry.category, entry.name, {
-                        position: entry.position ?? 0,
-                        depth: entry.depth ?? 4,
-                        order: entry.order ?? 100,
-                    });
-                }
-            }
-            updateStreamContent(`\n📚 已添加 ${AppState.persistent.defaultEntries.length} 个默认世界书条目\n`);
-            return true;
-        }
-
-        if (!AppState.settings.defaultWorldbookEntries?.trim()) return false;
-
-        try {
-            const defaultEntries = JSON.parse(AppState.settings.defaultWorldbookEntries);
-            mergeWorldbookDataIncremental(AppState.worldbook.generated, defaultEntries);
-            updateStreamContent('\n📚 已添加默认世界书条目\n');
-            return true;
-        } catch (error) {
-            Logger.error('Worldbook', '解析默认世界书条目失败:', error);
-            updateStreamContent('\n⚠️ 默认世界书条目格式错误，跳过\n');
-            return false;
-        }
     }
 
     return {
@@ -142,6 +103,5 @@ export function createWorldbookRuntimeService(deps = {}) {
         handleStartNewVolume,
         getAllVolumesWorldbook,
         rebuildWorldbookFromMemories,
-        applyDefaultWorldbookEntries,
     };
 }

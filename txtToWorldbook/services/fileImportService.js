@@ -19,7 +19,6 @@ export function createFileImportService(deps = {}) {
         showProgressSection,
         showResultSection,
         updateWorldbookPreview,
-        applyDefaultWorldbookEntries,
         saveCurrentSettings,
     } = deps;
 
@@ -80,7 +79,6 @@ export function createFileImportService(deps = {}) {
             AppState.memory.userSelectedIndex = null;
 
             AppState.worldbook.generated = { 地图环境: {}, 剧情节点: {}, 角色: {}, 知识书: {} };
-            applyDefaultWorldbookEntries();
             if (Object.keys(AppState.worldbook.generated).length > 0) {
                 showResultSection(true);
                 updateWorldbookPreview();

@@ -265,29 +265,6 @@ export function buildSettingsHtml() {
     </div>`;
 }
 
-function buildDefaultEntriesSectionHtml() {
-    return `
-    <div class="ttw-prompt-section ttw-mode-txt" style="margin-top:16px;">
-        <div class="ttw-prompt-header" data-target="ttw-default-entries-content">
-            <div style="display:flex;align-items:center;gap:8px;">
-                <span>📚</span><span style="font-weight:500;">向世界书中添加默认条目</span>
-                <span class="ttw-badge ttw-badge-gray">可选</span>
-            </div>
-            <span class="ttw-collapse-icon">▶</span>
-        </div>
-        <div id="ttw-default-entries-content" class="ttw-prompt-content">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <div class="ttw-setting-hint" style="font-size:11px;">每次转换完成后自动添加的世界书条目</div>
-                <div style="display:flex;gap:6px;">
-                    <button id="ttw-add-default-entry" class="ttw-btn ttw-btn-small" style="background:#27ae60;">➕ 添加</button>
-                    <button id="ttw-apply-default-entries" class="ttw-btn ttw-btn-small">🔄 立即应用</button>
-                </div>
-            </div>
-            <div id="ttw-default-entries-list" class="ttw-default-entries-list"></div>
-        </div>
-    </div>`;
-}
-
 function buildWorldbookPromptSectionHtml() {
     return `
     <div class="ttw-prompt-section">
@@ -407,83 +384,6 @@ function buildCategoryGuidePromptSectionHtml() {
     </div>`;
 }
 
-function buildPlotPromptSectionHtml() {
-    return `
-    <div class="ttw-prompt-section">
-        <div class="ttw-prompt-header" data-target="ttw-plot-content">
-            <div style="display:flex;align-items:center;gap:8px;">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                    <input type="checkbox" id="ttw-enable-plot">
-                    <span>📖</span><span style="font-weight:500;">剧情大纲</span>
-                </label>
-                <span class="ttw-badge ttw-badge-gray">可选</span>
-            </div>
-            <span class="ttw-collapse-icon">▶</span>
-        </div>
-        <div id="ttw-plot-content" class="ttw-prompt-content">
-            <textarea id="ttw-plot-prompt" rows="4" placeholder="留空使用默认..." class="ttw-textarea-small"></textarea>
-            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="ttw-btn ttw-btn-small ttw-reset-prompt" data-type="plot">🔄 恢复默认</button>
-                <button class="ttw-btn ttw-btn-small" id="ttw-plot-export-config">⚙️ 导出时的默认配置</button>
-            </div>
-        </div>
-    </div>`;
-}
-
-function buildStylePromptSectionHtml() {
-    return `
-    <div class="ttw-prompt-section">
-        <div class="ttw-prompt-header" data-target="ttw-style-content">
-            <div style="display:flex;align-items:center;gap:8px;">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                    <input type="checkbox" id="ttw-enable-style">
-                    <span>🎨</span><span style="font-weight:500;">文风配置</span>
-                </label>
-                <span class="ttw-badge ttw-badge-gray">可选</span>
-            </div>
-            <span class="ttw-collapse-icon">▶</span>
-        </div>
-        <div id="ttw-style-content" class="ttw-prompt-content">
-            <textarea id="ttw-style-prompt" rows="4" placeholder="留空使用默认..." class="ttw-textarea-small"></textarea>
-            <div style="margin-top:8px;"><button class="ttw-btn ttw-btn-small ttw-reset-prompt" data-type="style">🔄 恢复默认</button></div>
-        </div>
-    </div>`;
-}
-
-function buildMessageChainSectionHtml() {
-    return `
-    <div class="ttw-prompt-section">
-        <div class="ttw-prompt-header" data-target="ttw-suffix-content">
-            <div style="display:flex;align-items:center;gap:8px;">
-                <span>💬</span><span style="font-weight:500;color:var(--ttw-text-secondary);">消息链配置</span>
-                <span class="ttw-badge ttw-badge-gray">可选</span>
-            </div>
-            <span class="ttw-collapse-icon">▶</span>
-        </div>
-        <div id="ttw-suffix-content" class="ttw-prompt-content">
-            <div style="margin-bottom:12px;padding:10px;background:var(--ttw-bg-medium);border:1px solid var(--ttw-border-color);border-radius:6px;">
-                <label style="font-size:12px;color:var(--ttw-text-secondary);font-weight:bold;">📌 后缀提示词（追加到提示词末尾，在消息链转换之前生效）</label>
-                <textarea id="ttw-suffix-prompt" rows="2" placeholder="例如：请特别注意提取XX信息，修复乱码内容，注意区分同名角色..." class="ttw-textarea-small" style="margin-top:6px;"></textarea>
-            </div>
-            <div style="border-top:1px solid var(--ttw-border-color);padding-top:12px;">
-                <div class="ttw-setting-hint" style="margin-bottom:8px;line-height:1.6;">
-                    💬 配置发送给AI的消息链（类似对话补全预设）。每条消息可指定角色。<br>
-                    <code>{PROMPT}</code> 占位符会被替换为实际组装好的提示词内容。
-                </div>
-                <div id="ttw-chain-tavern-warning" style="display:none;margin-bottom:8px;padding:8px 10px;background:rgba(231,76,60,0.15);border-left:3px solid #e74c3c;border-radius:0 6px 6px 0;font-size:11px;color:#e74c3c;line-height:1.6;">
-                    ⚠️ <strong>酒馆API模式下</strong>，消息角色（system/assistant）会被酒馆的提示词后处理覆盖，且可能注入预设JB内容。<br>
-                    要让角色设置完全生效，请切换到<strong>自定义API模式</strong>（直连API，不经过酒馆处理）。
-                </div>
-                <div id="ttw-message-chain-list" style="margin-bottom:8px;"></div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button id="ttw-add-chain-msg" class="ttw-btn ttw-btn-small" style="background:rgba(52,152,219,0.5);">➕ 添加消息</button>
-                    <button id="ttw-reset-chain" class="ttw-btn ttw-btn-small">🔄 恢复默认</button>
-                </div>
-            </div>
-        </div>
-    </div>`;
-}
-
 function buildCategoriesSectionHtml() {
     return `
     <div class="ttw-category-flat-card">
@@ -507,9 +407,6 @@ function buildPromptConfigHtml() {
         </div>
         <div class="ttw-section-content ttw-prompt-config-content">
             ${buildCategoriesSectionHtml()}
-            ${buildPlotPromptSectionHtml()}
-            ${buildStylePromptSectionHtml()}
-            ${buildMessageChainSectionHtml()}
         </div>
     </div>`;
 }
@@ -725,7 +622,6 @@ function buildModalBodyHtml() {
         ${buildChapterRegexHtml()}
         ${buildPromptEditorSectionHtml()}
         ${buildSettingsHtml()}
-        ${buildDefaultEntriesSectionHtml()}
         ${buildPromptConfigHtml()}
         ${buildQueueSectionHtml()}
         ${buildProgressSectionHtml()}
@@ -775,7 +671,6 @@ export function hydrateSettingsFromState(deps = {}) {
         AppState,
         handleUseTavernApiChange,
         handleProviderChange,
-        renderMessageChainUI,
     } = deps;
 
     if (!AppState) return;
@@ -799,20 +694,8 @@ export function hydrateSettingsFromState(deps = {}) {
         if (indicator) indicator.style.display = AppState.processing.volumeMode ? 'block' : 'none';
     }
 
-    const enablePlotEl = document.getElementById('ttw-enable-plot');
-    if (enablePlotEl) enablePlotEl.checked = AppState.settings.enablePlotOutline;
-
-    const enableStyleEl = document.getElementById('ttw-enable-style');
-    if (enableStyleEl) enableStyleEl.checked = AppState.settings.enableLiteraryStyle;
-
     const worldbookPromptEl = document.getElementById('ttw-worldbook-prompt');
     if (worldbookPromptEl) worldbookPromptEl.value = AppState.settings.customWorldbookPrompt || defaultWorldbookPrompt;
-
-    const plotPromptEl = document.getElementById('ttw-plot-prompt');
-    if (plotPromptEl) plotPromptEl.value = AppState.settings.customPlotPrompt || '';
-
-    const stylePromptEl = document.getElementById('ttw-style-prompt');
-    if (stylePromptEl) stylePromptEl.value = AppState.settings.customStylePrompt || '';
 
     const consolidatePromptEl = document.getElementById('ttw-consolidate-prompt');
     if (consolidatePromptEl) consolidatePromptEl.value = AppState.settings.customConsolidatePrompt || defaultConsolidatePrompt;
@@ -906,13 +789,6 @@ export function hydrateSettingsFromState(deps = {}) {
 
     const forceChapterMarkerEl = document.getElementById('ttw-force-chapter-marker');
     if (forceChapterMarkerEl) forceChapterMarkerEl.checked = AppState.settings.forceChapterMarker;
-
-    const suffixPromptEl = document.getElementById('ttw-suffix-prompt');
-    if (suffixPromptEl) suffixPromptEl.value = AppState.settings.customSuffixPrompt || '';
-
-    if (typeof renderMessageChainUI === 'function') {
-        renderMessageChainUI();
-    }
 
     if (typeof handleProviderChange === 'function') {
         handleProviderChange('main');

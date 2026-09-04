@@ -16,7 +16,6 @@ export function createTaskStateService(deps = {}) {
         updateStartButtonState,
         updateSettingsUI,
         renderCategoriesList,
-        renderDefaultWorldbookEntriesUI,
         updateChapterRegexUI,
         showResultSection,
         updateWorldbookPreview,
@@ -278,7 +277,6 @@ export function createTaskStateService(deps = {}) {
                 updateStartButtonState(false);
                 updateSettingsUI();
                 renderCategoriesList();
-                renderDefaultWorldbookEntriesUI();
                 updateChapterRegexUI();
 
                 if (Object.keys(AppState.worldbook.generated).length > 0) {

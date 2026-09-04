@@ -81,12 +81,8 @@ export function createSettingsPersistenceService(deps) {
             ? volumeModeEl.checked
             : AppState.processing.volumeMode === true;
         AppState.settings.useVolumeMode = AppState.processing.volumeMode;
-        AppState.settings.enablePlotOutline = document.getElementById('ttw-enable-plot')?.checked ?? false;
-        AppState.settings.enableLiteraryStyle = document.getElementById('ttw-enable-style')?.checked ?? false;
         if (syncPromptFieldsFromDom) {
             AppState.settings.customWorldbookPrompt = document.getElementById('ttw-worldbook-prompt')?.value || '';
-            AppState.settings.customPlotPrompt = document.getElementById('ttw-plot-prompt')?.value || '';
-            AppState.settings.customStylePrompt = document.getElementById('ttw-style-prompt')?.value || '';
             AppState.settings.customConsolidatePrompt = document.getElementById('ttw-consolidate-prompt')?.value || '';
             AppState.settings.customDirectorFrameworkPrompt = document.getElementById('ttw-director-framework-prompt')?.value || '';
             AppState.settings.customDirectorInjectionPrompt = document.getElementById('ttw-director-injection-prompt')?.value || '';
@@ -127,10 +123,8 @@ export function createSettingsPersistenceService(deps) {
             ? forceChapterMarkerEl.checked
             : AppState.settings.forceChapterMarker !== false;
         AppState.settings.chapterRegexPattern = document.getElementById('ttw-chapter-regex')?.value || AppState.config.chapterRegex.pattern;
-        AppState.settings.defaultWorldbookEntriesUI = AppState.persistent.defaultEntries;
         AppState.settings.categoryDefaultConfig = AppState.config.categoryDefault;
         AppState.settings.entryPositionConfig = AppState.config.entryPosition;
-        AppState.settings.customSuffixPrompt = document.getElementById('ttw-suffix-prompt')?.value || '';
         const mainApi = readApiConfigFromDom('main');
         const directorApi = readApiConfigFromDom('director');
 

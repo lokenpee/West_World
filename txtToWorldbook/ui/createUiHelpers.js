@@ -1,8 +1,6 @@
-import { createMessageChainView } from './messageChainView.js';
 import { createSettingsStateView } from './settingsStateView.js';
 import { createCategoryListView } from './categoryListView.js';
 import { createCategoryEditorModal } from './categoryEditorModal.js';
-import { createDefaultEntriesView } from './defaultEntriesView.js';
 import { createEditorActionsFacade } from './editorActionsFacade.js';
 import { createChapterRegexView } from './chapterRegexView.js';
 import { createPromptPreviewModal } from './promptPreviewModal.js';
@@ -16,7 +14,6 @@ export function createUiHelpers(deps = {}) {
         AppState,
         ListRenderer,
         EventDelegate,
-        PerfUtils,
         ModalFactory,
         ErrorHandler,
         Logger,
@@ -36,20 +33,10 @@ export function createUiHelpers(deps = {}) {
     let apiModeView = null;
     let categoryEditorModal = null;
 
-    const messageChainView = createMessageChainView({
-        AppState,
-        ListRenderer,
-        EventDelegate,
-        saveCurrentSettings,
-        handleUseTavernApiChange: () => apiModeView?.handleUseTavernApiChange(),
-    });
-    const { renderMessageChainUI } = messageChainView;
-
     const settingsStateView = createSettingsStateView({
         AppState,
         handleUseTavernApiChange: () => apiModeView?.handleUseTavernApiChange(),
         handleProviderChange: (target = 'main') => apiModeView?.handleProviderChange(target),
-        renderMessageChainUI,
     });
     const {
         updateSettingsUI,
@@ -77,28 +64,10 @@ export function createUiHelpers(deps = {}) {
         renderCategoriesList: () => renderCategoriesList(),
     });
 
-    const defaultEntriesView = createDefaultEntriesView({
-        AppState,
-        ListRenderer,
-        PerfUtils,
-        EventDelegate,
-        ModalFactory,
-        ErrorHandler,
-        saveCurrentSettings,
-    });
-
     const editorActionsFacade = createEditorActionsFacade({
         categoryEditorModal,
-        defaultEntriesView,
     });
-    const {
-        showAddCategoryModal,
-        showEditCategoryModal,
-        renderDefaultWorldbookEntriesUI,
-        showAddDefaultEntryModal,
-        showEditDefaultEntryModal,
-        saveDefaultWorldbookEntriesUI,
-    } = editorActionsFacade;
+    const { showAddCategoryModal, showEditCategoryModal } = editorActionsFacade;
 
     const chapterRegexView = createChapterRegexView({
         AppState,
@@ -156,16 +125,11 @@ export function createUiHelpers(deps = {}) {
     } = progressView;
 
     return {
-        renderMessageChainUI,
         updateSettingsUI,
         updateChapterRegexUI,
         renderCategoriesList,
         showAddCategoryModal,
         showEditCategoryModal,
-        renderDefaultWorldbookEntriesUI,
-        showAddDefaultEntryModal,
-        showEditDefaultEntryModal,
-        saveDefaultWorldbookEntriesUI,
         testChapterRegex,
         handleUseTavernApiChange,
         handleProviderChange,

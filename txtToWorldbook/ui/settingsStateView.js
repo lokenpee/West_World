@@ -5,7 +5,6 @@ export function createSettingsStateView(deps = {}) {
         AppState,
         handleUseTavernApiChange,
         handleProviderChange,
-        renderMessageChainUI,
     } = deps;
 
     function updateSettingsUI() {
@@ -13,7 +12,6 @@ export function createSettingsStateView(deps = {}) {
             AppState,
             handleUseTavernApiChange,
             handleProviderChange,
-            renderMessageChainUI,
         });
     }
 

@@ -34,7 +34,6 @@ export function createFeatureServices(deps = {}) {
         saveCustomCategories,
         updateSettingsUI,
         renderCategoriesList,
-        renderDefaultWorldbookEntriesUI,
         updateChapterRegexUI,
         rebuildWorldbookFromMemories,
         showQueueSection,
@@ -168,7 +167,6 @@ export function createFeatureServices(deps = {}) {
         updateStartButtonState,
         updateSettingsUI,
         renderCategoriesList,
-        renderDefaultWorldbookEntriesUI,
         updateChapterRegexUI,
         showResultSection,
         updateWorldbookPreview,
@@ -185,7 +183,6 @@ export function createFeatureServices(deps = {}) {
         saveCustomCategories,
         updateSettingsUI,
         renderCategoriesList,
-        renderDefaultWorldbookEntriesUI,
         updateChapterRegexUI,
     });
 

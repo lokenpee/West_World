@@ -7,7 +7,6 @@ export function createApiService(deps = {}) {
         debugLog,
         messagesToString,
         convertToGeminiContents,
-        applyMessageChain,
     } = deps;
 
     function getApiConfig(target = 'main') {
@@ -781,11 +780,9 @@ export function createApiService(deps = {}) {
     }
 
     async function callTargetPrompt(prompt, taskId = null, target = 'main') {
-        const messages = target === 'main'
-            ? applyMessageChain(prompt)
-            : [{ role: 'user', content: String(prompt || '') }];
+        const messages = [{ role: 'user', content: String(prompt || '') }];
         const logPrefix = buildApiLogPrefix(target, taskId);
-        debugLog(`${logPrefix} 消息链转换完成, ${messages.length}条消息, roles=[${messages.map((m) => m.role).join(',')}]`);
+        debugLog(`${logPrefix} 使用单条用户消息, 任务长度=${messages[0].content.length}`);
         if (target === 'main' && AppState.settings.useTavernApi) {
             return callSillyTavernAPI(messages, taskId);
         }

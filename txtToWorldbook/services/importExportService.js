@@ -10,7 +10,6 @@ export function createImportExportService(deps = {}) {
         saveCustomCategories,
         updateSettingsUI,
         renderCategoriesList,
-        renderDefaultWorldbookEntriesUI,
         updateChapterRegexUI,
     } = deps;
 
@@ -298,7 +297,6 @@ export function createImportExportService(deps = {}) {
 
                 updateSettingsUI();
                 renderCategoriesList();
-                renderDefaultWorldbookEntriesUI();
                 updateChapterRegexUI();
                 saveCurrentSettings();
 

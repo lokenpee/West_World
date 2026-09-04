@@ -4,14 +4,8 @@
 };
 
 export const DEFAULT_CATEGORY_LIGHT = {
-    '角色': false,
+    '角色': true,
     '地点': true,
-    '组织': false,
-    '剧情大纲': true,
-    '知识书': false,
-    '文风配置': false,
-    '地图环境': true,
-    '剧情节点': true
 };
 
 export const DEFAULT_PLOT_OUTLINE_CONFIG = {
@@ -67,105 +61,6 @@ export const DEFAULT_WORLDBOOK_CATEGORIES = [
 **特征**: 外观、环境、气候、建筑风格等显著特点
 **重要事件**: 在此地点发生的关键剧情
 **相关角色**: 常出没或居住于此的角色`,
-        defaultPosition: 0,
-        defaultDepth: 4,
-        defaultOrder: 100,
-        autoIncrementOrder: false,
-    },
-    {
-        name: '组织',
-        enabled: true,
-        isBuiltin: true,
-        entryExample: '组织真实名称',
-        keywordsExample: ['组织名', '简称', '代号'],
-        contentGuide: `基于原文的组织描述，使用markdown格式，按以下字段组织：
-
-**名称**: 组织在文中的真实名称（必填）
-**性质**: 门派/家族/商会/帝国/佣兵团等类型
-**成员**: 核心成员及职位，如宗主、长老、弟子等
-**目标**: 组织的宗旨、追求或阴谋
-**势力范围**: 控制的区域或影响力范围
-**敌对关系**: 主要敌对组织
-**重要事件**: 该组织参与的关键剧情`,
-        defaultPosition: 0,
-        defaultDepth: 4,
-        defaultOrder: 100,
-        autoIncrementOrder: false,
-    },
-    {
-        name: '道具',
-        enabled: false,
-        isBuiltin: false,
-        entryExample: '道具名称',
-        keywordsExample: ['道具名', '别名'],
-        contentGuide: `基于原文的道具描述，使用markdown格式，按以下字段组织：
-
-**名称**: 道具在文中的名称（必填）
-**类型**: 武器/丹药/功法/材料/饰品等
-**功能**: 具体作用、效果、威力
-**来源**: 如何获得、谁制造、出自何处
-**持有者**: 当前拥有者或历任主人
-**外观**: 形状、颜色、大小等视觉特征
-**重要事件**: 与该道具相关的关键剧情`,
-        defaultPosition: 0,
-        defaultDepth: 4,
-        defaultOrder: 100,
-        autoIncrementOrder: false,
-    },
-    {
-        name: '玩法',
-        enabled: false,
-        isBuiltin: false,
-        entryExample: '玩法名称',
-        keywordsExample: ['玩法名', '规则名'],
-        contentGuide: `基于原文的玩法/规则描述，使用markdown格式，按以下字段组织：
-
-**名称**: 玩法或规则的名称（必填）
-**规则说明**: 具体规则、流程、限制条件
-**参与条件**: 谁可以参与，需要什么资格或实力
-**奖惩机制**: 胜利/失败的奖励与惩罚
-**应用场景**: 在什么情况下触发此玩法
-**相关角色**: 主持者、常见参与者`,
-        defaultPosition: 0,
-        defaultDepth: 4,
-        defaultOrder: 100,
-        autoIncrementOrder: false,
-    },
-    {
-        name: '章节剧情',
-        enabled: false,
-        isBuiltin: false,
-        entryExample: '第X章',
-        keywordsExample: ['章节名', '章节号'],
-        contentGuide: `该章节的剧情概要，使用markdown格式，按以下字段组织：
-
-**章节标题**: 本章的标题（如有）
-**主要事件**: 本章发生的核心剧情，按时间顺序列出2-4件
-**出场角色**: 本章出现的主要角色
-**关键转折**: 剧情走向发生变化的节点
-**伏笔线索**: 埋下的后续剧情线索
-**情感基调**: 本章的整体情绪，如紧张、温馨、悲壮等
-**场景切换**: 涉及的主要地点转换`,
-        defaultPosition: 0,
-        defaultDepth: 4,
-        defaultOrder: 100,
-        autoIncrementOrder: false,
-    },
-    {
-        name: '角色内心',
-        enabled: false,
-        isBuiltin: false,
-        entryExample: '角色名-内心世界',
-        keywordsExample: ['角色名', '内心', '心理'],
-        contentGuide: `角色的内心想法和心理活动，使用markdown格式，按以下字段组织：
-
-**角色名**: 该内心活动所属的角色（必填）
-**原文内容**: 引用触发此内心活动的原文片段
-**内心独白**: 角色当时的真实想法，用第一人称或第三人称呈现
-**情感变化**: 情绪如何转变，如从平静到愤怒、从绝望到希望
-**动机分析**: 为什么这样想，深层驱动力是什么
-**心理矛盾**: 内心的挣扎、纠结、两难选择
-**潜台词**: 没有说出口但隐含的意思`,
         defaultPosition: 0,
         defaultDepth: 4,
         defaultOrder: 100,

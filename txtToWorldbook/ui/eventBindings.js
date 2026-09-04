@@ -511,10 +511,6 @@ export function bindSettingEvents(deps = {}) {
         resetToDefaultCategories,
         renderCategoriesList,
         renderCategoryGuidePromptEditors,
-        showAddDefaultEntryModal,
-        saveDefaultWorldbookEntriesUI,
-        applyDefaultWorldbookEntries,
-        showResultSection,
         updateWorldbookPreview,
         ErrorHandler,
         testChapterRegex,
@@ -596,8 +592,6 @@ export function bindSettingEvents(deps = {}) {
         '#ttw-rechunk-btn': { click: rechunkMemories },
         '#ttw-add-category': { click: showAddCategoryModal },
         '#ttw-reset-categories': { click: async () => { if (await confirmAction('确定重置为默认分类配置吗？这将清除所有自定义分类。', { title: '重置分类', danger: true })) { await resetToDefaultCategories(); renderCategoriesList(); if (typeof renderCategoryGuidePromptEditors === 'function') renderCategoryGuidePromptEditors(AppState); } } },
-        '#ttw-add-default-entry': { click: showAddDefaultEntryModal },
-        '#ttw-apply-default-entries': { click: () => { saveDefaultWorldbookEntriesUI(); const applied = applyDefaultWorldbookEntries(); if (applied) { showResultSection(true); updateWorldbookPreview(); ErrorHandler.showUserSuccess('默认世界书条目已应用！'); } else { ErrorHandler.showUserError('没有默认世界书条目'); } } },
         '#ttw-chapter-regex': { change: (e) => { AppState.config.chapterRegex.pattern = e.target.value; saveCurrentSettings(); } },
         '#ttw-test-chapter-regex': { click: testChapterRegex },
         '#ttw-update-plugin-btn': { click: () => { if (typeof handlePluginSelfUpdate === 'function') handlePluginSelfUpdate(); } },
@@ -674,45 +668,18 @@ export function bindSettingEvents(deps = {}) {
         if (el) el.addEventListener('change', saveCurrentSettings);
     });
 
-    ['ttw-plugin-enabled', 'ttw-incremental-mode', 'ttw-volume-mode', 'ttw-enable-plot', 'ttw-enable-style', 'ttw-force-chapter-marker', 'ttw-allow-recursion', 'ttw-director-enabled', 'ttw-director-fallback-main', 'ttw-director-run-every-turn'].forEach((id) => {
+    ['ttw-plugin-enabled', 'ttw-incremental-mode', 'ttw-volume-mode', 'ttw-force-chapter-marker', 'ttw-allow-recursion', 'ttw-director-enabled', 'ttw-director-fallback-main', 'ttw-director-run-every-turn'].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', saveCurrentSettings);
     });
 }
 
 export function bindPromptEvents(deps = {}) {
-    const {
-        saveCurrentSettings,
-    } = deps;
-
-    ['ttw-plot-prompt', 'ttw-style-prompt', 'ttw-suffix-prompt'].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('input', () => saveCurrentSettings({ syncPromptFieldsFromDom: true }));
-    });
+    void deps;
 }
 
 export function bindMessageChainEvents(deps = {}) {
-    const {
-        AppState,
-        renderMessageChainUI,
-        saveCurrentSettings,
-        confirmAction,
-    } = deps;
-
-    renderMessageChainUI();
-    document.getElementById('ttw-add-chain-msg').addEventListener('click', () => {
-        if (!AppState.settings.promptMessageChain) AppState.settings.promptMessageChain = [];
-        AppState.settings.promptMessageChain.push({ role: 'user', content: '', enabled: true });
-        renderMessageChainUI();
-        saveCurrentSettings();
-    });
-    document.getElementById('ttw-reset-chain').addEventListener('click', async () => {
-        if (await confirmAction('确定恢复默认消息链？', { title: '恢复默认消息链' })) {
-            AppState.settings.promptMessageChain = [{ role: 'user', content: '{PROMPT}', enabled: true }];
-            renderMessageChainUI();
-            saveCurrentSettings();
-        }
-    });
+    void deps;
 }
 
 function toggleCollapsePanel(contentId, header) {

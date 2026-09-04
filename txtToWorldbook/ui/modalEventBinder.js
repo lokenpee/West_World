@@ -4,7 +4,6 @@ export function createModalEventBinder(deps) {
         bindSettingEventsUI,
         bindCollapsePanelEventsUI,
         bindPromptEventsUI,
-        bindMessageChainEventsUI,
         bindFileEventsUI,
         bindActionEventsUI,
         bindStreamEventsUI,
@@ -28,13 +27,9 @@ export function createModalEventBinder(deps) {
         resetToDefaultCategories,
         renderCategoriesList,
         renderCategoryGuidePromptEditors,
-        showAddDefaultEntryModal,
-        saveDefaultWorldbookEntriesUI,
-        applyDefaultWorldbookEntries,
         showResultSection,
         updateWorldbookPreview,
         testChapterRegex,
-        renderMessageChainUI,
         handleFileSelect,
         handleClearFile,
         handleStartConversion,
@@ -103,9 +98,6 @@ export function createModalEventBinder(deps) {
             resetToDefaultCategories,
             renderCategoriesList,
             renderCategoryGuidePromptEditors,
-            showAddDefaultEntryModal,
-            saveDefaultWorldbookEntriesUI,
-            applyDefaultWorldbookEntries,
             showResultSection,
             updateWorldbookPreview,
             ErrorHandler,
@@ -115,12 +107,6 @@ export function createModalEventBinder(deps) {
 
         bindCollapsePanelEventsUI();
         bindPromptEventsUI({ saveCurrentSettings });
-        bindMessageChainEventsUI({
-            AppState,
-            renderMessageChainUI,
-            saveCurrentSettings,
-            confirmAction,
-        });
         bindFileEventsUI({
             AppState,
             ErrorHandler,

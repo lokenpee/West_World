@@ -31,7 +31,6 @@ export function createProcessingService(deps = {}) {
         updateStartButtonState,
         showResultSection,
         updateWorldbookPreview,
-        applyDefaultWorldbookEntries,
         ErrorHandler,
         handleRepairMemoryWithSplit,
         setProcessingStatus,
@@ -3325,7 +3324,6 @@ ${'='.repeat(50)}
                 AppState.worldbook.currentVolumeIndex = 0;
 
                 AppState.worldbook.generated = { 地图环境: {}, 剧情节点: {}, 角色: {}, 知识书: {} };
-                applyDefaultWorldbookEntries();
             }
         }
 
