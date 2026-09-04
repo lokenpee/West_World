@@ -67,20 +67,13 @@ export function createSettingsPersistenceService(deps) {
             syncPromptFieldsFromDom = false,
         } = options;
 
-        AppState.settings.chunkSize = parseInt(document.getElementById('ttw-chunk-size')?.value) || 8000;
+        AppState.settings.chunkSize = 8000;
         AppState.settings.pluginEnabled = document.getElementById('ttw-plugin-enabled')?.checked
             ?? AppState.settings.pluginEnabled !== false;
-        AppState.settings.apiTimeout = (parseInt(document.getElementById('ttw-api-timeout')?.value) || 120) * 1000;
-        const incrementalModeEl = document.getElementById('ttw-incremental-mode');
-        AppState.processing.incrementalMode = incrementalModeEl
-            ? incrementalModeEl.checked
-            : AppState.processing.incrementalMode !== false;
-
-        const volumeModeEl = document.getElementById('ttw-volume-mode');
-        AppState.processing.volumeMode = volumeModeEl
-            ? volumeModeEl.checked
-            : AppState.processing.volumeMode === true;
-        AppState.settings.useVolumeMode = AppState.processing.volumeMode;
+        AppState.settings.apiTimeout = 120000;
+        AppState.processing.incrementalMode = true;
+        AppState.processing.volumeMode = false;
+        AppState.settings.useVolumeMode = false;
         if (syncPromptFieldsFromDom) {
             AppState.settings.customWorldbookPrompt = document.getElementById('ttw-worldbook-prompt')?.value || '';
             AppState.settings.customConsolidatePrompt = document.getElementById('ttw-consolidate-prompt')?.value || '';
@@ -118,10 +111,7 @@ export function createSettingsPersistenceService(deps) {
         AppState.settings.parallelMode = AppState.config.parallel.mode;
         AppState.settings.chapterCompletionMode = document.getElementById('ttw-chapter-completion-mode')?.value || AppState.settings.chapterCompletionMode || 'consistency';
         AppState.settings.categoryLightSettings = { ...AppState.config.categoryLight };
-        const forceChapterMarkerEl = document.getElementById('ttw-force-chapter-marker');
-        AppState.settings.forceChapterMarker = forceChapterMarkerEl
-            ? forceChapterMarkerEl.checked
-            : AppState.settings.forceChapterMarker !== false;
+        AppState.settings.forceChapterMarker = true;
         AppState.settings.chapterRegexPattern = document.getElementById('ttw-chapter-regex')?.value || AppState.config.chapterRegex.pattern;
         AppState.settings.categoryDefaultConfig = AppState.config.categoryDefault;
         AppState.settings.entryPositionConfig = AppState.config.entryPosition;
@@ -157,16 +147,9 @@ export function createSettingsPersistenceService(deps) {
         AppState.settings.customApiModel = AppState.settings.mainApi.model;
         AppState.settings.customApiMaxTokens = AppState.settings.mainApi.maxTokens;
 
-        const allowRecursionEl = document.getElementById('ttw-allow-recursion');
-        AppState.settings.allowRecursion = allowRecursionEl
-            ? allowRecursionEl.checked
-            : AppState.settings.allowRecursion === true;
-        AppState.settings.filterResponseTags = document.getElementById('ttw-filter-tags')?.value
-            || AppState.settings.filterResponseTags
-            || 'thinking,/think';
-        AppState.settings.debugMode = document.getElementById('ttw-debug-mode')?.checked
-            ?? AppState.settings.debugMode
-            ?? false;
+        AppState.settings.allowRecursion = false;
+        AppState.settings.filterResponseTags = 'thinking,/think';
+        AppState.settings.debugMode = false;
         AppState.settings.plotOutlineExportConfig = AppState.config.plotOutline;
 
         try {
@@ -185,6 +168,15 @@ export function createSettingsPersistenceService(deps) {
                 const parsed = JSON.parse(saved);
                 AppState.settings = { ...defaultSettings, ...parsed };
                 AppState.settings.pluginEnabled = parsed.pluginEnabled ?? true;
+                AppState.settings.chunkSize = 8000;
+                AppState.settings.apiTimeout = 120000;
+                AppState.processing.incrementalMode = true;
+                AppState.processing.volumeMode = false;
+                AppState.settings.useVolumeMode = false;
+                AppState.settings.forceChapterMarker = true;
+                AppState.settings.allowRecursion = false;
+                AppState.settings.filterResponseTags = 'thinking,/think';
+                AppState.settings.debugMode = false;
 
                 const migratedMainApi = normalizeApiConfig(
                     parsed.mainApi,

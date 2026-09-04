@@ -87,7 +87,7 @@ ${buildApiConfigCard('director', '🎬 导演AI配置')}
     </div>`;
 }
 
-const PLUGIN_VERSION = 'A1.8';
+const PLUGIN_VERSION = 'A1.9';
 
 function buildPluginUpdateHtml() {
     return '';
@@ -164,79 +164,6 @@ function buildChapterRegexHtml() {
     </div>`;
 }
 
-function buildBasicSettingsHtml() {
-    return `
-    <div style="display:flex;gap:12px;margin-bottom:12px;align-items:flex-end;">
-        <div style="flex:1;">
-            <label class="ttw-label">每块字数</label>
-            <input type="number" id="ttw-chunk-size" value="8000" min="1000" max="500000" class="ttw-input">
-        </div>
-        <div style="flex:1;">
-            <label class="ttw-label">API超时(秒)</label>
-            <input type="number" id="ttw-api-timeout" value="120" min="30" max="600" class="ttw-input">
-        </div>
-        <div>
-            <button id="ttw-rechunk-btn" class="ttw-btn ttw-btn-small" style="background:rgba(230,126,34,0.5);" title="修改字数后点击重新分块">🔄 重新分块</button>
-        </div>
-    </div>`;
-}
-
-function buildCheckboxOptionsHtml() {
-    return `
-    <div style="display:flex;flex-direction:column;gap:8px;">
-        <label class="ttw-checkbox-label ttw-checkbox-with-hint">
-            <input type="checkbox" id="ttw-incremental-mode" checked>
-            <div>
-                <span>📝 增量输出模式</span>
-                <div class="ttw-setting-hint">只输出变更的条目，减少重复内容</div>
-            </div>
-        </label>
-        <label class="ttw-checkbox-label ttw-checkbox-with-hint ttw-checkbox-purple">
-            <input type="checkbox" id="ttw-volume-mode">
-            <div>
-                <span>📦 分卷模式</span>
-                <div class="ttw-setting-hint">上下文超限时自动分卷，避免记忆分裂</div>
-            </div>
-        </label>
-        <label class="ttw-checkbox-label ttw-checkbox-with-hint" style="background:rgba(230,126,34,0.15);border:1px solid rgba(230,126,34,0.3);">
-            <input type="checkbox" id="ttw-force-chapter-marker" checked>
-            <div>
-                <span style="color:#e67e22;">📌 强制记忆为章节</span>
-                <div class="ttw-setting-hint">开启后会在提示词中强制AI将每个记忆块视为对应章节</div>
-            </div>
-        </label>
-        <label class="ttw-checkbox-label ttw-checkbox-with-hint" style="background:rgba(52,152,219,0.15);border:1px solid rgba(52,152,219,0.3);">
-            <input type="checkbox" id="ttw-allow-recursion">
-            <div>
-                <span style="color:#3498db;">🔄 允许条目递归</span>
-                <div class="ttw-setting-hint">勾选后条目可被其他条目激活，并可触发进一步递归</div>
-            </div>
-        </label>
-    </div>`;
-}
-
-function buildFilterTagsHtml() {
-    return `
-    <div style="margin-top:12px;padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:6px;">
-        <div style="font-weight:bold;color:#e74c3c;margin-bottom:6px;font-size:12px;">🧹 响应过滤标签</div>
-        <div class="ttw-setting-hint" style="margin-bottom:8px;font-size:11px;">
-            用逗号分隔。<code>thinking</code>=移除&lt;thinking&gt;内容&lt;/thinking&gt;；<code>/think</code>=移除开头到&lt;/think&gt;的内容
-        </div>
-        <input type="text" id="ttw-filter-tags" class="ttw-input" value="thinking,/think" placeholder="例如: thinking,/think,tucao" style="font-size:12px;">
-    </div>`;
-}
-
-function buildDebugModeHtml() {
-    return `
-    <div style="margin-top:10px;">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
-            <input type="checkbox" id="ttw-debug-mode">
-            <span>🔍 调试模式</span>
-            <span style="color:#888;font-size:11px;">（在实时输出中打印每步操作和耗时）</span>
-        </label>
-    </div>`;
-}
-
 export function buildSettingsHtml() {
     return `
     <div class="ttw-section ttw-settings-section" id="ttw-settings-section" style="display:none;">
@@ -256,10 +183,6 @@ export function buildSettingsHtml() {
             </div>
             ${buildCustomApiSectionHtml()}
             ${buildParallelConfigHtml()}
-            ${buildBasicSettingsHtml()}
-            ${buildCheckboxOptionsHtml()}
-            ${buildFilterTagsHtml()}
-            ${buildDebugModeHtml()}
         </div>
         <div id="ttw-volume-indicator" class="ttw-volume-indicator"></div>
     </div>`;
@@ -698,22 +621,6 @@ export function hydrateSettingsFromState(deps = {}) {
     const pluginEnabledEl = document.getElementById('ttw-plugin-enabled');
     if (pluginEnabledEl) pluginEnabledEl.checked = AppState.settings.pluginEnabled !== false;
 
-    const chunkSizeEl = document.getElementById('ttw-chunk-size');
-    if (chunkSizeEl) chunkSizeEl.value = AppState.settings.chunkSize;
-
-    const apiTimeoutEl = document.getElementById('ttw-api-timeout');
-    if (apiTimeoutEl) apiTimeoutEl.value = Math.round((AppState.settings.apiTimeout || 120000) / 1000);
-
-    const incrementalModeEl = document.getElementById('ttw-incremental-mode');
-    if (incrementalModeEl) incrementalModeEl.checked = AppState.processing.incrementalMode;
-
-    const volumeModeEl = document.getElementById('ttw-volume-mode');
-    if (volumeModeEl) {
-        volumeModeEl.checked = AppState.processing.volumeMode;
-        const indicator = document.getElementById('ttw-volume-indicator');
-        if (indicator) indicator.style.display = AppState.processing.volumeMode ? 'block' : 'none';
-    }
-
     const worldbookPromptEl = document.getElementById('ttw-worldbook-prompt');
     if (worldbookPromptEl) worldbookPromptEl.value = AppState.settings.customWorldbookPrompt || defaultWorldbookPrompt;
 
@@ -807,25 +714,9 @@ export function hydrateSettingsFromState(deps = {}) {
     const directorRunEveryTurnEl = document.getElementById('ttw-director-run-every-turn');
     if (directorRunEveryTurnEl) directorRunEveryTurnEl.checked = AppState.settings.directorRunEveryTurn !== false;
 
-    const forceChapterMarkerEl = document.getElementById('ttw-force-chapter-marker');
-    if (forceChapterMarkerEl) forceChapterMarkerEl.checked = AppState.settings.forceChapterMarker;
-
     if (typeof handleProviderChange === 'function') {
         handleProviderChange('main');
         handleProviderChange('director');
-    }
-
-    const allowRecursionEl = document.getElementById('ttw-allow-recursion');
-    if (allowRecursionEl) allowRecursionEl.checked = AppState.settings.allowRecursion;
-
-    const filterTagsEl = document.getElementById('ttw-filter-tags');
-    if (filterTagsEl) filterTagsEl.value = AppState.settings.filterResponseTags || 'thinking,/think';
-
-    const debugModeEl = document.getElementById('ttw-debug-mode');
-    if (debugModeEl) {
-        debugModeEl.checked = AppState.settings.debugMode || false;
-        const copyBtn = document.getElementById('ttw-copy-stream');
-        if (copyBtn) copyBtn.style.display = AppState.settings.debugMode ? 'inline-block' : 'none';
     }
 
     renderCategoryGuidePromptEditors(AppState);

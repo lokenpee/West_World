@@ -487,10 +487,6 @@ export function bindStreamEvents(deps = {}) {
         }
     });
 
-    document.getElementById('ttw-debug-mode').addEventListener('change', (e) => {
-        const copyBtn = document.getElementById('ttw-copy-stream');
-        if (copyBtn) copyBtn.style.display = e.target.checked ? 'inline-block' : 'none';
-    });
 }
 
 export function bindSettingEvents(deps = {}) {
@@ -504,7 +500,6 @@ export function bindSettingEvents(deps = {}) {
         switchApiTab,
         handleFetchModels,
         handleQuickTest,
-        rechunkMemories,
         showAddCategoryModal,
         saveCustomCategories,
         confirmAction,
@@ -604,8 +599,6 @@ export function bindSettingEvents(deps = {}) {
             AppState.settings.chapterCompletionMode = e.target.value === 'throughput' ? 'throughput' : 'consistency';
             saveCurrentSettings();
         } },
-        '#ttw-volume-mode': { change: (e) => { AppState.processing.volumeMode = e.target.checked; const indicator = document.getElementById('ttw-volume-indicator'); if (indicator) indicator.style.display = AppState.processing.volumeMode ? 'block' : 'none'; } },
-        '#ttw-rechunk-btn': { click: rechunkMemories },
         '#ttw-add-category': { click: showAddCategoryModal },
         '#ttw-reset-categories': { click: async () => { if (await confirmAction('确定重置为默认分类配置吗？这将清除所有自定义分类。', { title: '重置分类', danger: true })) { await resetToDefaultCategories(); renderCategoriesList(); if (typeof renderCategoryGuidePromptEditors === 'function') renderCategoryGuidePromptEditors(AppState); } } },
         '#ttw-chapter-regex': { change: (e) => { AppState.config.chapterRegex.pattern = e.target.value; saveCurrentSettings(); } },
@@ -679,12 +672,12 @@ export function bindSettingEvents(deps = {}) {
         }
     });
 
-    ['ttw-api-key', 'ttw-api-endpoint', 'ttw-api-model', 'ttw-api-max-tokens', 'ttw-chunk-size', 'ttw-api-timeout', 'ttw-api-key-main', 'ttw-api-endpoint-main', 'ttw-api-model-main', 'ttw-api-max-tokens-main', 'ttw-api-key-director', 'ttw-api-endpoint-director', 'ttw-api-model-director', 'ttw-api-max-tokens-director'].forEach((id) => {
+    ['ttw-api-key', 'ttw-api-endpoint', 'ttw-api-model', 'ttw-api-max-tokens', 'ttw-api-key-main', 'ttw-api-endpoint-main', 'ttw-api-model-main', 'ttw-api-max-tokens-main', 'ttw-api-key-director', 'ttw-api-endpoint-director', 'ttw-api-model-director', 'ttw-api-max-tokens-director'].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', saveCurrentSettings);
     });
 
-    ['ttw-plugin-enabled', 'ttw-incremental-mode', 'ttw-volume-mode', 'ttw-force-chapter-marker', 'ttw-allow-recursion', 'ttw-director-enabled', 'ttw-director-fallback-main', 'ttw-director-run-every-turn'].forEach((id) => {
+    ['ttw-plugin-enabled', 'ttw-director-enabled', 'ttw-director-fallback-main', 'ttw-director-run-every-turn'].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', saveCurrentSettings);
     });
