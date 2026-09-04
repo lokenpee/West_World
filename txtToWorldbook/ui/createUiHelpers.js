@@ -47,6 +47,7 @@ export function createUiHelpers(deps = {}) {
         AppState,
         ListRenderer,
         EventDelegate,
+        defaultCategories: DEFAULT_WORLDBOOK_CATEGORIES,
         hasDefaultCategory: (name) => DEFAULT_WORLDBOOK_CATEGORIES.some((c) => c.name === name),
         saveCustomCategories,
         showEditCategoryModal: (index) => categoryEditorModal?.showEditCategoryModal(index),

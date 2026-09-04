@@ -3,6 +3,7 @@ export function createCategoryListView(deps = {}) {
         AppState,
         ListRenderer,
         EventDelegate,
+        defaultCategories = [],
         hasDefaultCategory,
         saveCustomCategories,
         showEditCategoryModal,
@@ -13,6 +14,11 @@ export function createCategoryListView(deps = {}) {
     function renderCategoriesList() {
         const listContainer = document.getElementById('ttw-categories-list');
         if (!listContainer) return;
+
+        if (!Array.isArray(AppState.persistent.customCategories)
+            || AppState.persistent.customCategories.length === 0) {
+            AppState.persistent.customCategories = JSON.parse(JSON.stringify(defaultCategories));
+        }
 
         const primaryOrder = ['角色', '地点', '组织', '道具', '章节剧情'];
         const primaryOrderMap = new Map(primaryOrder.map((name, index) => [name, index]));
